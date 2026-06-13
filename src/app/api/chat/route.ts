@@ -7,6 +7,7 @@
  * is size-capped, and errors are sanitised (logged server-side).
  */
 import { loadChat, saveChat } from "@/server/cache";
+import { sanitizeMessages } from "@/lib/sanitize-messages";
 
 export const runtime = "nodejs";
 
@@ -41,8 +42,11 @@ export async function POST(req: Request) {
   if (JSON.stringify(body.messages).length > MAX_CHAT_BYTES) {
     return fail("chat payload too large", 413);
   }
+  // Defense-in-depth: never persist a transcript that could crash a future load
+  // (malformed tool-call args, duplicate ids), even if a client skips its own pass.
+  const clean = sanitizeMessages(body.messages);
   try {
-    await saveChat(body.session, body.messages);
+    await saveChat(body.session, clean);
     return Response.json({ ok: true });
   } catch (err) {
     console.error("[chat:POST]", err);

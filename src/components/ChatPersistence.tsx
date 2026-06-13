@@ -13,6 +13,7 @@
  */
 import * as React from "react";
 import { useAgent } from "@copilotkit/react-core/v2";
+import { sanitizeMessages } from "@/lib/sanitize-messages";
 
 export function ChatPersistence({ session }: { session: string | null }) {
   const { agent } = useAgent();
@@ -30,9 +31,11 @@ export function ChatPersistence({ session }: { session: string | null }) {
         .then((r) => r.json())
         .then((d) => {
           if (cancelled) return;
-          const msgs = d?.messages;
-          if (Array.isArray(msgs) && msgs.length > 0 && agent.messages.length === 0) {
-            agent.setMessages(msgs);
+          // Sanitize before restoring: repair malformed tool-call args + drop
+          // duplicate ids so an old broken transcript can't crash the chat view.
+          const msgs = sanitizeMessages(d?.messages);
+          if (msgs.length > 0 && agent.messages.length === 0) {
+            agent.setMessages(msgs as never);
           }
         })
         .catch(() => {});
@@ -43,19 +46,22 @@ export function ChatPersistence({ session }: { session: string | null }) {
     };
   }, [session, agent]);
 
-  // Save the transcript when a run settles.
+  // Save the transcript when a run completes successfully. We do NOT save on
+  // failure: a crashed run can leave malformed tool calls in the buffer, and
+  // persisting them would poison the next restore. Sanitize on the way out too,
+  // so the DB never holds a transcript that can crash a future load.
   React.useEffect(() => {
     if (!session || !agent) return;
     const persist = () => {
-      const messages = agent.messages;
-      if (!messages || messages.length === 0) return;
+      const messages = sanitizeMessages(agent.messages as unknown);
+      if (messages.length === 0) return;
       void fetch("/api/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ session, messages }),
       }).catch(() => {});
     };
-    const sub = agent.subscribe({ onRunFinalized: persist, onRunFailed: persist });
+    const sub = agent.subscribe({ onRunFinalized: persist });
     return () => sub.unsubscribe();
   }, [session, agent]);
 
