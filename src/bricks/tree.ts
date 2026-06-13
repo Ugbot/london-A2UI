@@ -150,6 +150,44 @@ export function duplicateById(tree: CompositionNode, id: string): CompositionNod
   return walk(t);
 }
 
+/**
+ * Move the node `dragId` to sit immediately before `targetId` (as its sibling),
+ * reparenting if needed. No-op if either is missing, if dragId is the root, or if
+ * dragId is an ancestor of targetId (can't move a node into itself). Returns a new
+ * tree. Used for drag-to-rearrange on the canvas.
+ */
+export function moveNode(
+  tree: CompositionNode,
+  dragId: string,
+  targetId: string,
+): CompositionNode {
+  if (dragId === targetId) return tree;
+  if (tree.id === dragId) return tree; // can't move the root
+  const node = findById(tree, dragId);
+  if (!node) return tree;
+  // Guard: dragId must not be an ancestor of targetId.
+  if (findById(node, targetId)) return tree;
+
+  const detached = removeById(tree, dragId);
+  if (!detached) return tree;
+  const moved = clone(node);
+
+  let inserted = false;
+  const walk = (n: CompositionNode): CompositionNode => {
+    const kids = n.children ?? [];
+    const idx = kids.findIndex((c) => c.id === targetId);
+    if (idx !== -1) {
+      const next = [...kids];
+      next.splice(idx, 0, moved);
+      inserted = true;
+      return { ...n, children: next };
+    }
+    return { ...n, children: n.children?.map(walk) };
+  };
+  const result = walk(detached);
+  return inserted ? result : tree; // targetId not found (or is root) → no-op
+}
+
 /** Return a new tree with `child` inserted under `parentId` (at end, or index). */
 export function insertChild(
   tree: CompositionNode,

@@ -23,6 +23,8 @@ export interface WidgetCanvasProps {
   onStatus?: (status: RenderStatus) => void;
   /** Extra content rendered on the right of the header (e.g. presence). */
   headerExtra?: ReactNode;
+  /** Apply a drag-to-rearrange reorder (transactional/undoable in the parent). */
+  onMove?: (dragId: string, beforeId: string) => void;
 }
 
 function StatusPill({ status, updated }: { status: RenderStatus | null | undefined; updated: boolean }) {
@@ -42,11 +44,12 @@ function StatusPill({ status, updated }: { status: RenderStatus | null | undefin
   );
 }
 
-export function WidgetCanvas({ tree, status, onStatus, headerExtra }: WidgetCanvasProps) {
+export function WidgetCanvas({ tree, status, onStatus, headerExtra, onMove }: WidgetCanvasProps) {
   const { mergedVars } = useStyleLayers();
   const { selectMode, setSelectMode, targetId, selectElement, clearTarget } = useMentionStore();
   const prevKey = useRef<string>("");
   const [flash, setFlash] = useState(false);
+  const [rearrange, setRearrange] = useState(false);
 
   // Click-to-target: in select mode, clicking a tagged element selects it
   // (queues an @id into the chat input + highlights it).
@@ -99,6 +102,20 @@ export function WidgetCanvas({ tree, status, onStatus, headerExtra }: WidgetCanv
           >
             {selectMode ? "Click an element…" : "Target"}
           </button>
+          {onMove && (
+            <button
+              onClick={() => setRearrange((r) => !r)}
+              className={cn(
+                "rounded-[var(--radius)] border px-2.5 py-1 text-xs font-medium",
+                rearrange
+                  ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
+                  : "border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:bg-[var(--secondary)]",
+              )}
+              title="Drag elements to rearrange them"
+            >
+              {rearrange ? "Done rearranging" : "Rearrange"}
+            </button>
+          )}
           {headerExtra}
         </div>
       </div>
@@ -121,7 +138,7 @@ export function WidgetCanvas({ tree, status, onStatus, headerExtra }: WidgetCanv
         >
           <CursorLayer>
             <div className={flash ? "animate-[brick-fade_400ms_ease]" : undefined}>
-              <Renderer tree={tree} onStatus={onStatus} />
+              <Renderer tree={tree} onStatus={onStatus} rearrange={rearrange} onMove={onMove} />
             </div>
           </CursorLayer>
         </div>

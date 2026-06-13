@@ -19,6 +19,14 @@ import {
 } from "@/bricks/composition";
 import type { RenderStatus } from "@/lib/types";
 
+/** Canvas edit controls passed down to every node (drag-to-rearrange). */
+interface RenderControls {
+  rearrange: boolean;
+  onMove?: (dragId: string, beforeId: string) => void;
+}
+const RenderControlsContext = React.createContext<RenderControls>({ rearrange: false });
+const DRAG_MIME = "application/x-brick-id";
+
 /** Render a single node and (if the brick accepts them) its children. */
 function NodeRenderer({ node }: { node: CompositionNode }): React.ReactElement {
   const brick = registry.get(node.brick);
@@ -48,15 +56,63 @@ function NodeRenderer({ node }: { node: CompositionNode }): React.ReactElement {
     );
 
   // Tag each addressable node for @-targeting (click-to-select + highlight).
-  // `display: contents` keeps the wrapper out of layout so Grid/Stack are intact.
   if (node.id) {
+    const id = node.id;
+    return <NodeWrapper id={id}>{rendered}</NodeWrapper>;
+  }
+  return rendered;
+}
+
+/**
+ * Per-node wrapper. Normally `display:contents` (out of layout, so Grid/Stack are
+ * intact). In rearrange mode it becomes a real draggable box with drop handling,
+ * so dragging one brick onto another reorders/reparents it (transactional/undoable
+ * via onMove). stopPropagation keeps drag/drop on the innermost element.
+ */
+function NodeWrapper({ id, children }: { id: string; children: React.ReactNode }) {
+  const { rearrange, onMove } = React.useContext(RenderControlsContext);
+  const [over, setOver] = React.useState(false);
+
+  if (!rearrange) {
     return (
-      <div className="contents" data-brick-id={node.id}>
-        {rendered}
+      <div className="contents" data-brick-id={id}>
+        {children}
       </div>
     );
   }
-  return rendered;
+  return (
+    <div
+      data-brick-id={id}
+      draggable
+      onDragStart={(e) => {
+        e.stopPropagation();
+        e.dataTransfer.setData(DRAG_MIME, id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!over) setOver(true);
+      }}
+      onDragLeave={(e) => {
+        e.stopPropagation();
+        setOver(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setOver(false);
+        const dragId = e.dataTransfer.getData(DRAG_MIME);
+        if (dragId && dragId !== id) onMove?.(dragId, id);
+      }}
+      className={
+        "cursor-move rounded-[var(--radius)] outline-dashed outline-1 outline-[var(--border)] " +
+        (over ? "outline-2 outline-[var(--primary)] bg-[var(--secondary)]" : "")
+      }
+    >
+      {children}
+    </div>
+  );
 }
 
 interface BoundaryProps {
@@ -101,13 +157,17 @@ export interface RendererProps {
   tree: CompositionNode | null;
   /** Called whenever validation or rendering outcome changes. */
   onStatus?: (status: RenderStatus) => void;
+  /** Drag-to-rearrange mode: elements become draggable boxes. */
+  rearrange?: boolean;
+  /** Apply a reorder (drag id → before id). */
+  onMove?: (dragId: string, beforeId: string) => void;
 }
 
 /**
  * Top-level renderer: validates the tree against the registry, reports status,
  * and renders inside an error boundary that resets when the tree changes.
  */
-export function Renderer({ tree, onStatus }: RendererProps): React.ReactElement {
+export function Renderer({ tree, onStatus, rearrange = false, onMove }: RendererProps): React.ReactElement {
   const key = treeKey(tree);
   const result = React.useMemo(
     () => (tree ? validateComposition(tree, registry) : null),
@@ -153,7 +213,9 @@ export function Renderer({ tree, onStatus }: RendererProps): React.ReactElement 
         onStatus?.({ ok: false, stage: "render", errors: [{ path: "root", message }] })
       }
     >
-      <NodeRenderer node={result.value} />
+      <RenderControlsContext.Provider value={{ rearrange, onMove }}>
+        <NodeRenderer node={result.value} />
+      </RenderControlsContext.Provider>
     </RenderErrorBoundary>
   );
 }

@@ -40,6 +40,7 @@ import {
   removeById,
   duplicateById,
   insertChild,
+  moveNode,
 } from "@/bricks/tree";
 import type { RenderStatus } from "@/lib/types";
 import { streamToElement } from "@/state/store";
@@ -290,6 +291,23 @@ export default function WidgetComposerPage() {
     },
   });
 
+  useFrontendTool({
+    name: "move_element",
+    description:
+      "Reorder/rearrange the canvas: move element `id` to sit immediately before `beforeId` (its new sibling), reparenting if needed. Use to reorder cards/sections or move a brick into another container.",
+    parameters: z.object({
+      id: z.string().describe("Element to move (without @)"),
+      beforeId: z.string().describe("Move it to just before this element"),
+    }),
+    handler: async ({ id, beforeId }) => {
+      const tree = widgetRef.current;
+      if (!tree) return "There is no widget on the canvas yet.";
+      if (!findById(tree, id)) return `No element "${id}".`;
+      if (!findById(tree, beforeId)) return `No element "${beforeId}".`;
+      return applyTree(moveNode(tree, id, beforeId));
+    },
+  });
+
   // Hotwire/Turbo-Stream-style messaging: push a live update to any keyed
   // element (bricks with a matching bindKey re-render instantly).
   useFrontendTool({
@@ -423,6 +441,10 @@ export default function WidgetComposerPage() {
               tree={widget}
               status={status}
               onStatus={setStatus}
+              onMove={(dragId, beforeId) => {
+                const t = widgetRef.current;
+                if (t) applyTree(moveNode(t, dragId, beforeId));
+              }}
               headerExtra={
                 <div className="flex items-center gap-3">
                   <button

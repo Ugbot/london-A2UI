@@ -7,9 +7,48 @@ import {
   removeById,
   duplicateById,
   insertChild,
+  moveNode,
   labelOf,
 } from "./tree";
 import type { CompositionNode } from "./composition";
+
+describe("moveNode (drag-to-rearrange)", () => {
+  const make = (): CompositionNode =>
+    ensureIds({
+      brick: "Stack",
+      props: {},
+      children: [
+        { brick: "Text", props: { text: "a" }, id: "a" },
+        { brick: "Text", props: { text: "b" }, id: "b" },
+        { brick: "Card", props: {}, id: "c", children: [{ brick: "Text", props: { text: "d" }, id: "d" }] },
+      ],
+    });
+
+  const order = (n: CompositionNode) => (n.children ?? []).map((c) => c.id);
+
+  it("reorders siblings (move b before a)", () => {
+    const r = moveNode(make(), "b", "a");
+    expect(order(r)).toEqual(["b", "a", "c"]);
+  });
+
+  it("reparents a node before a target in another container (move a before d)", () => {
+    const r = moveNode(make(), "a", "d");
+    expect(order(r)).toEqual(["b", "c"]); // a left the root
+    expect((findById(r, "c")!.children ?? []).map((x) => x.id)).toEqual(["a", "d"]);
+  });
+
+  it("is a no-op when moving a node into its own descendant", () => {
+    const r = moveNode(make(), "c", "d"); // c contains d
+    expect(order(r)).toEqual(["a", "b", "c"]);
+  });
+
+  it("is a no-op for the root, unknown ids, or self-move", () => {
+    const t = make();
+    expect(order(moveNode(t, "stack-1", "a"))).toEqual(order(t)); // root id from ensureIds
+    expect(order(moveNode(t, "nope", "a"))).toEqual(order(t));
+    expect(order(moveNode(t, "a", "a"))).toEqual(order(t));
+  });
+});
 
 /** Build a random-ish tree for property checks (deterministic seed via index). */
 function randomTree(seed: number): CompositionNode {
