@@ -11,6 +11,7 @@ import * as C from "./components";
 import * as CC from "./collab-components";
 import { Map as MapBrick } from "./map-components";
 import { EXTRA_BRICKS } from "./extra";
+import { GENERATED_BRICKS } from "./generated";
 import * as S from "./schemas";
 
 export const BRICKS: BrickDef[] = [
@@ -299,4 +300,8 @@ export const BRICKS: BrickDef[] = [
   // Self-contained bricks built in src/bricks/extra/* (candlestick, area, gauge,
   // scatter, heatmap, flowchart).
   ...EXTRA_BRICKS,
+
+  // Foundry-generated bricks (agent-authored, possibly lib-backed). Added at
+  // runtime by /api/foundry; empty until the foundry creates one.
+  ...GENERATED_BRICKS,
 ];

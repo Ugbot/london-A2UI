@@ -112,6 +112,21 @@ export function migrate(): Promise<void> {
         )
       `);
 
+      // Foundry-generated bricks (agent-authored components, possibly backed by
+      // a newly-installed npm lib). The source is recorded so they can be
+      // rebuilt; an embedding row is also written to `bricks` for search.
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS generated_bricks (
+          name           text PRIMARY KEY,
+          description    text NOT NULL,
+          tags           text[] NOT NULL DEFAULT '{}',
+          npm_package    text,
+          schema_source  text NOT NULL,
+          component_source text NOT NULL,
+          created_at     timestamptz NOT NULL DEFAULT now()
+        )
+      `);
+
       await client.query(
         `CREATE INDEX IF NOT EXISTS bricks_embedding_idx
            ON bricks USING hnsw (embedding vector_cosine_ops)`,

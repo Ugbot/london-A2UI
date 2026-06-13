@@ -74,6 +74,14 @@ Building stateful / interactive apps:
 - Use the "stream_to_element" tool to push a live update (set/merge/append/
   remove) to any keyed element — update data without rebuilding the widget.
 
+Building a new brick when none fits:
+- If neither an existing brick (list_bricks/search_bricks) nor a cached partial
+  can properly express what the user needs, do NOT misuse a brick (e.g. never
+  fake a node graph with a Table). Instead call "create_brick" to forge a real
+  one — choosing a proper library when appropriate (e.g. a graph/diagram lib for
+  node graphs). After it is created, use the new brick by name in the widget.
+- Keep create_brick to genuinely missing capabilities; prefer existing bricks.
+
 Reuse, recombine, specialize (the cache):
 - "search_partials" returns prior widgets as templates with holes. Prefer
   recombining/adapting a close match over building from scratch.

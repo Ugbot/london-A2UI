@@ -16,8 +16,9 @@ import { ThreadsPanelGate } from "@/components/threads-drawer/locked-state";
 import styles from "@/components/threads-drawer/threads-drawer.module.css";
 
 import { WidgetCanvas } from "@/components/WidgetCanvas";
-import { WidgetPreviewCard, AskUserCard } from "@/components/chat-cards";
+import { WidgetPreviewCard, AskUserCard, FoundryCard } from "@/components/chat-cards";
 import { useMentionStore } from "@/state/mentionStore";
+import { useFoundryStore } from "@/state/foundryStore";
 import { registry } from "@/bricks/registry";
 import {
   validateComposition,
@@ -51,6 +52,7 @@ export default function WidgetComposerPage() {
   const [status, setStatus] = useState<RenderStatus | null>(null);
   const { toggleLayer, clearLayers } = useStyleLayers();
   const { enable: enableCollab, disable: disableCollab } = useCollab();
+  const { auto: autoBricks, setAuto: setAutoBricks } = useFoundryStore();
 
   // Keep stable refs so frontend-tool handlers always see the latest widget +
   // setter (handlers are registered once and would otherwise capture stale state).
@@ -278,6 +280,40 @@ export default function WidgetComposerPage() {
     ),
   });
 
+  // The foundry: build a brand-new brick (optionally backed by a new npm lib)
+  // when NOTHING existing fits. Approval-gated unless Auto is on.
+  useFrontendTool({
+    name: "set_auto_bricks",
+    description:
+      "Turn Auto brick-creation on/off. When on, proposed new bricks are built immediately without an approval prompt.",
+    parameters: z.object({ enabled: z.boolean() }),
+    handler: async ({ enabled }) => {
+      setAutoBricks(enabled);
+      return enabled ? "Auto bricks ON." : "Auto bricks OFF (approval required).";
+    },
+  });
+
+  useHumanInTheLoop({
+    name: "create_brick",
+    description:
+      "Build a BRAND-NEW brick when no existing brick fits (check list_bricks/search_bricks first). Prefer a real library over misusing a brick (e.g. a graph lib for node graphs, not a Table). Provide: name (PascalCase), description, tags, optional npmPackage to install, schemaSource (a module exporting `schema` = a zod object and `type Props = z.infer<typeof schema>`), and componentSource (a module that STARTS with the \"use client\" directive, imports the lib + `import type { Props } from \"./schema\"`, and exports `function Component(props: Props)`). Use CSS vars (var(--border), var(--card), var(--foreground)) for theme. The user approves unless Auto is on. After it's created, use the new brick by name.",
+    parameters: z.object({
+      name: z.string().describe("PascalCase brick name, e.g. NodeGraph"),
+      description: z.string(),
+      tags: z.array(z.string()).optional(),
+      npmPackage: z.string().optional().describe("npm package to install, e.g. reactflow"),
+      schemaSource: z.string().describe("Full schema.ts module source"),
+      componentSource: z.string().describe("Full component.tsx module source ('use client')"),
+    }),
+    render: ({ args, status, respond, result }) => (
+      <FoundryCard
+        spec={args}
+        respond={status === "executing" ? respond : undefined}
+        result={typeof result === "string" ? result : undefined}
+      />
+    ),
+  });
+
   return (
     <div className={`${styles.layout} threadsLayout`}>
       <ThreadsPanelGate>
@@ -301,6 +337,18 @@ export default function WidgetComposerPage() {
               onStatus={setStatus}
               headerExtra={
                 <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setAutoBricks(!autoBricks)}
+                    title="Auto: build new bricks without an approval prompt"
+                    className={
+                      "rounded-[var(--radius)] border px-2.5 py-1 text-xs font-medium " +
+                      (autoBricks
+                        ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
+                        : "border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:bg-[var(--secondary)]")
+                    }
+                  >
+                    Auto bricks {autoBricks ? "on" : "off"}
+                  </button>
                   <StyleMenu />
                   <CollabControls />
                 </div>

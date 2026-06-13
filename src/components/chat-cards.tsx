@@ -10,6 +10,7 @@ import * as React from "react";
 import { Renderer } from "@/components/Renderer";
 import { registry } from "@/bricks/registry";
 import { validateComposition, type CompositionNode } from "@/bricks/composition";
+import { useFoundryStore } from "@/state/foundryStore";
 
 /** A framed, scrollable live preview of a composition tree, shown in chat. */
 export function WidgetPreviewCard({ tree }: { tree: unknown }) {
@@ -83,6 +84,113 @@ export function AskUserCard({
       {answered && (
         <span className="text-xs text-[var(--muted-foreground)]">You chose: {answered}</span>
       )}
+    </div>
+  );
+}
+
+export interface FoundrySpec {
+  name?: string;
+  description?: string;
+  tags?: string[];
+  npmPackage?: string;
+  schemaSource?: string;
+  componentSource?: string;
+}
+
+/**
+ * Approval + creation card for a foundry-proposed new brick. Shows the spec;
+ * with Auto on it builds immediately, otherwise waits for Approve. Performs the
+ * actual creation (POST /api/foundry) on the client, then responds to the agent.
+ */
+export function FoundryCard({
+  spec,
+  respond,
+  result,
+}: {
+  spec: FoundrySpec;
+  respond?: (value: unknown) => void | Promise<void>;
+  result?: string;
+}) {
+  const auto = useFoundryStore((s) => s.auto);
+  const [state, setState] = React.useState<"idle" | "building" | "done" | "error" | "cancelled">(
+    result ? "done" : "idle",
+  );
+  const [message, setMessage] = React.useState<string>(result ?? "");
+
+  const build = React.useCallback(async () => {
+    if (!respond) return;
+    setState("building");
+    try {
+      const res = await fetch("/api/foundry", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(spec),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setState("error");
+        setMessage(data.error ?? `HTTP ${res.status}`);
+        await respond(`Brick creation failed: ${data.error ?? res.status}. ${data.detail ?? ""}`);
+        return;
+      }
+      setState("done");
+      setMessage(
+        `Created "${data.name}"${data.installed ? ` (installed ${data.installed})` : ""}.`,
+      );
+      await respond(
+        `Created brick "${data.name}"${data.installed ? ` backed by ${data.installed}` : ""}. It is now available — use it in the widget.`,
+      );
+    } catch (err) {
+      setState("error");
+      setMessage(String(err));
+      await respond(`Brick creation error: ${String(err)}`);
+    }
+  }, [respond, spec]);
+
+  // Auto mode: build as soon as the card mounts (no approval gate).
+  React.useEffect(() => {
+    if (auto && respond && state === "idle") void build();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto, respond]);
+
+  return (
+    <div className="my-1 flex flex-col gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] p-3 text-[var(--card-foreground)]">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold">New brick: {spec.name}</span>
+        {spec.npmPackage && (
+          <span className="rounded-full bg-[var(--secondary)] px-2 py-0.5 font-mono text-[10px]">
+            npm: {spec.npmPackage}
+          </span>
+        )}
+      </div>
+      {spec.description && (
+        <p className="text-xs text-[var(--muted-foreground)]">{spec.description}</p>
+      )}
+      {state === "idle" && respond && !auto && (
+        <div className="flex gap-2">
+          <button
+            onClick={build}
+            className="rounded-[var(--radius)] bg-[var(--primary)] px-3 py-1 text-xs font-medium text-[var(--primary-foreground)]"
+          >
+            Approve & build
+          </button>
+          <button
+            onClick={() => {
+              setState("cancelled");
+              respond("User declined to create the brick.");
+            }}
+            className="rounded-[var(--radius)] border border-[var(--border)] px-3 py-1 text-xs"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+      {state === "building" && (
+        <span className="text-xs text-amber-600">⏳ Building{spec.npmPackage ? " (installing lib)" : ""}…</span>
+      )}
+      {state === "done" && <span className="text-xs text-emerald-700">✓ {message}</span>}
+      {state === "error" && <span className="text-xs text-red-600">✗ {message}</span>}
+      {state === "cancelled" && <span className="text-xs text-[var(--muted-foreground)]">Cancelled.</span>}
     </div>
   );
 }
