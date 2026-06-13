@@ -101,6 +101,12 @@ Connecting live data / building data-driven views (map a SPA over an API/CMS):
 - SECRETS: never ask the user to paste API keys/tokens into chat. Create the
   connection (auth type only) and tell them to open the Data panel to add the secret.
   Default mode is "proxy"; only use "direct" for public, no-auth URLs.
+- MORTAR (TS logic between bricks): when a response needs reshaping into brick-ready
+  data, set ApiData "transform" to a small TS module: 'export default (data, ctx) =>
+  ...'. For a derived/formatted value on a display brick (Text/Heading/StatCard), set
+  "bindCompute" to 'export default (_, ctx) => ...' using ctx.get(key) (store) and
+  ctx.record (current record), e.g. format a price or sum a list. Mortar is pure data
+  logic — no network (use Connections for that).
 
 Research → dashboard:
 - For requests that need real, current information ("research X", "build a

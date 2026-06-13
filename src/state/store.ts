@@ -68,3 +68,39 @@ export const useWidgetStore = create<WidgetStateStore>((set, get) => ({
 export function streamToElement(action: StreamAction): void {
   useWidgetStore.getState().apply(action);
 }
+
+/**
+ * Register a DERIVED key: recompute `compute(depValues, get)` whenever any
+ * dependency key changes, and write the result to `key`. The reactive backbone
+ * for mortar — a computed value propagates to every brick bound to `key` in real
+ * time (Zustand subscription graph). Returns an unsubscribe; recomputes once now.
+ */
+export function registerDerived(
+  key: string,
+  deps: string[],
+  compute: (depValues: unknown[], get: (k: string) => unknown) => unknown,
+): () => void {
+  const get = (k: string) => useWidgetStore.getState().data[k];
+  const recompute = () => {
+    let next: unknown;
+    try {
+      next = compute(deps.map(get), get);
+    } catch {
+      return; // a throwing derivation must not break the store
+    }
+    if (next !== useWidgetStore.getState().data[key]) {
+      useWidgetStore.getState().set(key, next);
+    }
+  };
+
+  let prev = deps.map(get);
+  const unsub = useWidgetStore.subscribe((state) => {
+    const cur = deps.map((d) => state.data[d]);
+    if (cur.some((v, i) => v !== prev[i])) {
+      prev = cur;
+      recompute();
+    }
+  });
+  recompute();
+  return unsub;
+}

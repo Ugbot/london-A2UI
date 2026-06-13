@@ -26,8 +26,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useElementData } from "@/state/hooks";
 import { useWidgetStore } from "@/state/store";
-import { RecordProvider, useRecordField } from "@/state/record";
+import { RecordProvider, useRecordField, useRecord } from "@/state/record";
 import { assembleFormBody } from "./form-util";
+import { runMortar } from "@/mortar/run";
 import {
   Card as UICard,
   CardContent,
@@ -159,24 +160,32 @@ export function Divider({ label }: DividerProps) {
  * Both hooks run unconditionally (Rules of Hooks); returns undefined when no
  * binding yields a value so the caller falls back to its static prop.
  */
-function useBoundValue(bindKey?: string, bindField?: string): unknown {
+function useBoundValue(bindKey?: string, bindField?: string, bindCompute?: string): unknown {
   const recordVal = useRecordField(bindField);
+  const record = useRecord();
   const storeVal = useElementData<unknown>(bindKey, undefined);
+  if (bindCompute) {
+    const out = runMortar(bindCompute, recordVal, {
+      get: (k: string) => useWidgetStore.getState().data[k],
+      record,
+    });
+    if (out !== undefined) return out;
+  }
   if (bindField !== undefined && recordVal !== undefined) return recordVal;
   if (bindKey !== undefined && storeVal !== undefined) return storeVal;
   return undefined;
 }
 
-export function Heading({ text, level, bindField }: HeadingProps) {
-  const bound = useBoundValue(undefined, bindField);
+export function Heading({ text, level, bindField, bindCompute }: HeadingProps) {
+  const bound = useBoundValue(undefined, bindField, bindCompute);
   const shown = bound !== undefined ? String(bound) : text;
   const Tag = (["h1", "h2", "h3", "h4"][level - 1] ?? "h2") as keyof React.JSX.IntrinsicElements;
   const size = ["text-3xl", "text-2xl", "text-xl", "text-lg"][level - 1] ?? "text-2xl";
   return <Tag className={cn("font-semibold tracking-tight", size)}>{shown}</Tag>;
 }
 
-export function Text({ text, muted, bindKey, bindField }: TextProps) {
-  const bound = useBoundValue(bindKey, bindField);
+export function Text({ text, muted, bindKey, bindField, bindCompute }: TextProps) {
+  const bound = useBoundValue(bindKey, bindField, bindCompute);
   const shown = bound !== undefined ? String(bound) : text;
   return <p className={cn("text-sm leading-relaxed", muted && "text-[var(--muted-foreground)]")}>{shown}</p>;
 }
@@ -197,8 +206,8 @@ export function Badge({ text, variant, bindField }: BadgeProps) {
   );
 }
 
-export function StatCard({ label, value, delta, trend, bindKey, bindField }: StatCardProps) {
-  const bound = useBoundValue(bindKey, bindField);
+export function StatCard({ label, value, delta, trend, bindKey, bindField, bindCompute }: StatCardProps) {
+  const bound = useBoundValue(bindKey, bindField, bindCompute);
   const shownValue = bound !== undefined ? String(bound) : value;
   const trendColor = { up: "text-emerald-600", down: "text-red-600", flat: "text-[var(--muted-foreground)]" }[trend];
   const arrow = { up: "▲", down: "▼", flat: "→" }[trend];
@@ -713,14 +722,21 @@ export function Checkbox({ label, checked, bindKey }: CheckboxProps) {
 /** Fetch a dataset (through the authed proxy, or a direct public URL) into a
  *  keyed store element. Charts/Repeaters/stats bound to `targetKey` update live. */
 export function ApiData(props: ApiDataProps) {
-  const { connectionId, endpointId, url, method, mode, query, headers, body, targetKey, jsonPath, intervalMs, label } = props;
+  const { connectionId, endpointId, url, method, mode, query, headers, body, targetKey, jsonPath, transform, intervalMs, label } = props;
   const { data, error, isFetching } = useQuery({
-    queryKey: ["apidata", connectionId, endpointId, url, method, mode, JSON.stringify(query ?? null), JSON.stringify(body ?? null)],
+    queryKey: ["apidata", connectionId, endpointId, url, method, mode, JSON.stringify(query ?? null), JSON.stringify(body ?? null), transform ?? ""],
     queryFn: async () => {
+      const shape = (raw: unknown) => {
+        const picked = getJsonPath(raw, jsonPath);
+        // Mortar: reshape the response into brick-ready data before storing.
+        return transform
+          ? runMortar(transform, picked, { get: (k: string) => useWidgetStore.getState().data[k] })
+          : picked;
+      };
       if (mode === "direct" && url) {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return getJsonPath(await res.json(), jsonPath);
+        return shape(await res.json());
       }
       const res = await fetch("/api/proxy", {
         method: "POST",
@@ -729,7 +745,7 @@ export function ApiData(props: ApiDataProps) {
       });
       const json = (await res.json()) as { ok?: boolean; status?: number; data?: unknown; error?: string };
       if (!json.ok) throw new Error(json.error ?? `proxy error (${json.status})`);
-      return getJsonPath(json.data, jsonPath);
+      return shape(json.data);
     },
     refetchInterval: intervalMs && intervalMs > 0 ? intervalMs : false,
   });

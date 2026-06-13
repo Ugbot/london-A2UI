@@ -48,6 +48,7 @@
     "react-dom": "^19.2.1",
     "react-leaflet": "^5.0.0",
     "recharts": "^3.8.1",
+    "sucrase": "^3.35.1",
     "tailwind-merge": "^3.4.0",
     "three": "^0.184.0",
     "y-protocols": "^1.0.7",

@@ -25,6 +25,12 @@ const bindField = z
   .optional()
   .describe("Dot path into the current record (inside a Repeater) to show as this brick's value, e.g. 'name' or 'address.city'");
 
+/** Mortar: a TS module computing this brick's value from the store/record. */
+const bindCompute = z
+  .string()
+  .optional()
+  .describe("Mortar: a TS module 'export default (_, ctx) => value' computing this brick's value from ctx.get(key) (store) and ctx.record (current record). Use for derived values like totals/formatting.");
+
 // --- Layout ---
 export const stackSchema = z.object({
   direction: z.enum(["vertical", "horizontal"]).default("vertical"),
@@ -58,6 +64,7 @@ export const headingSchema = z.object({
   text: z.string(),
   level: z.number().int().min(1).max(4).default(2),
   bindField,
+  bindCompute,
 });
 
 export const textSchema = z.object({
@@ -65,6 +72,7 @@ export const textSchema = z.object({
   muted: z.boolean().default(false),
   bindKey,
   bindField,
+  bindCompute,
 });
 
 export const badgeSchema = z.object({
@@ -80,6 +88,7 @@ export const statCardSchema = z.object({
   trend: z.enum(["up", "down", "flat"]).default("flat"),
   bindKey,
   bindField,
+  bindCompute,
 });
 
 export const listSchema = z.object({
@@ -206,6 +215,7 @@ export const apiDataSchema = z.object({
   body: z.unknown().optional(),
   targetKey: z.string().describe("Store key to write the fetched value into (a dataset)"),
   jsonPath: z.string().optional().describe("Dot path into the response, e.g. data.results"),
+  transform: z.string().optional().describe("Mortar: a TS module 'export default (data, ctx) => shaped' applied to the fetched data before it's written to targetKey (reshape a response into brick-ready data)"),
   intervalMs: z.number().int().min(0).max(600000).default(0).describe("Poll interval ms; 0 = fetch once"),
   label: z.string().optional(),
 });
