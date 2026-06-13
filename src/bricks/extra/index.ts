@@ -11,6 +11,7 @@ import { scatterChartBrick } from "./scatter";
 import { heatmapBrick } from "./heatmap";
 import { flowchartBrick } from "./flowchart";
 import { masterDetailBrick } from "./master-detail";
+import { forceGraphBrick } from "./force-graph";
 
 export const EXTRA_BRICKS: BrickDef[] = [
   candlestickBrick,
@@ -20,4 +21,5 @@ export const EXTRA_BRICKS: BrickDef[] = [
   heatmapBrick,
   flowchartBrick,
   masterDetailBrick,
+  forceGraphBrick,
 ];
