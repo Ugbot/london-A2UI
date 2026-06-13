@@ -79,6 +79,29 @@ Building stateful / interactive apps:
 - Use the "stream_to_element" tool to push a live update (set/merge/append/
   remove) to any keyed element — update data without rebuilding the widget.
 
+Connecting live data / building data-driven views (map a SPA over an API/CMS):
+- First call "list_connections" to see saved data sources (APIs/CMSs). To add one
+  from a spec, call "import_openapi" (a spec URL or JSON); for a one-off endpoint
+  with no spec, call "add_endpoint". Use "call_api" to test a connection/endpoint
+  before wiring bricks.
+- READ data with the "ApiData" brick: set connectionId+endpointId (proxied + authed,
+  the default) OR a direct public "url" with mode "direct"; it writes the response
+  into "targetKey" (use jsonPath to pick a sub-field). This is a "dataset".
+- DASHBOARD style: bind charts/StatCards/Table to the dataset via bindKey. FILTERS:
+  give an Input/Select a bindKey for a param key and reference it in ApiData "query"
+  so changing it re-queries (Superset-style).
+- COLLECTION/CMS style: put a "Repeater" bound to the dataset array (bindKey); its
+  ONE child is the per-record template. Inside it, display bricks read record fields
+  via "bindField" (e.g. bindField "title", "author.name"). This renders one card/row
+  per record (Gatsby/Wix repeater).
+- WRITE back with the "Form" brick: give inputs a bindKey like "form.x.<field>",
+  set the Form fieldsPrefix to "form.x.", and connectionId+endpointId (or url) for
+  the submit; it posts the collected fields, can write the response to a key and
+  refresh datasets (refetchKeys).
+- SECRETS: never ask the user to paste API keys/tokens into chat. Create the
+  connection (auth type only) and tell them to open the Data panel to add the secret.
+  Default mode is "proxy"; only use "direct" for public, no-auth URLs.
+
 Research → dashboard:
 - For requests that need real, current information ("research X", "build a
   dashboard about Y"), call the "research" tool first. Then compose a dashboard

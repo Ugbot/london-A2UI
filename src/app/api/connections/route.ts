@@ -21,14 +21,11 @@ import {
   type AuthType,
   type EndpointDef,
 } from "@/server/connections";
-import { parseOpenApi } from "@/lib/openapi";
-import { assertSafeUrl, SsrfError } from "@/lib/ssrf";
+import { importOpenApiConnection } from "@/server/openapi-import";
+import { SsrfError } from "@/lib/ssrf";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const ALLOW_LOCAL = process.env.PROXY_ALLOW_LOCAL === "1";
-const MAX_SPEC_BYTES = 5 * 1024 * 1024;
 
 interface Body {
   source?: "openapi" | "manual";
@@ -55,25 +52,6 @@ function fail(message: string, status: number) {
   return Response.json({ error: message }, { status });
 }
 
-/** Fetch an OpenAPI spec URL through the SSRF guard, size-capped, JSON only. */
-async function fetchSpec(url: string): Promise<unknown> {
-  const safe = await assertSafeUrl(url, { allowLocal: ALLOW_LOCAL });
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 10_000);
-  try {
-    const res = await fetch(safe, { signal: ctrl.signal, redirect: "manual" });
-    if (!res.ok) throw new Error(`spec fetch failed (${res.status})`);
-    if (Number(res.headers.get("content-length") ?? 0) > MAX_SPEC_BYTES) {
-      throw new Error("spec too large");
-    }
-    const text = await res.text();
-    if (text.length > MAX_SPEC_BYTES) throw new Error("spec too large");
-    return JSON.parse(text);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 export async function GET(req: NextRequest) {
   if (unauthorized(req)) return fail("Unauthorized", 401);
   try {
@@ -97,13 +75,11 @@ export async function POST(req: NextRequest) {
     : { type: "none" };
   try {
     if (b.source === "openapi") {
-      const spec = b.specJson ?? (b.specUrl ? await fetchSpec(b.specUrl) : null);
-      if (!spec) return fail("specUrl or specJson is required", 400);
-      const parsed = parseOpenApi(spec, b.specUrl);
-      const connection = await createConnection({
-        name: b.name ?? parsed.name,
-        baseUrl: b.baseUrl ?? parsed.baseUrl,
-        endpoints: parsed.endpoints,
+      const connection = await importOpenApiConnection({
+        specUrl: b.specUrl,
+        specJson: b.specJson,
+        name: b.name,
+        baseUrl: b.baseUrl,
         auth,
       });
       return Response.json({ connection });
