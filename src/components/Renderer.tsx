@@ -36,8 +36,11 @@ function NodeRenderer({ node }: { node: CompositionNode }): React.ReactElement {
   const rendered =
     brick.acceptsChildren && node.children?.length ? (
       <Component {...props}>
+        {/* Key by the stable node id (fallback to index) so React reconciles
+            surgically — moving/editing one brick won't remount its siblings, and
+            undo/redo diffs cleanly. */}
         {node.children.map((child, i) => (
-          <NodeRenderer key={i} node={child} />
+          <NodeRenderer key={child.id ?? i} node={child} />
         ))}
       </Component>
     ) : (

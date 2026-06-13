@@ -8,7 +8,7 @@ import {
   CopilotSidebar,
 } from "@copilotkit/react-core/v2";
 import type { CSSProperties } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import { ThreadsDrawer } from "@/components/threads-drawer";
@@ -42,7 +42,7 @@ import {
 } from "@/bricks/tree";
 import type { RenderStatus } from "@/lib/types";
 import { streamToElement } from "@/state/store";
-import { useSharedWidget } from "@/collab/hooks";
+import { useSharedWidget, useCanvasHistory } from "@/collab/hooks";
 import { CollabControls } from "@/collab/CollabControls";
 import { useCollab } from "@/collab/provider";
 import { StyleMenu } from "@/style/StyleMenu";
@@ -71,6 +71,26 @@ export default function WidgetComposerPage() {
   // The canvas persists per SESSION (stable), not per chat thread.
   const sessionRef = useRef(session);
   sessionRef.current = session;
+
+  // Transactional undo/redo over the canvas (Yjs UndoManager). Persist the
+  // post-undo/redo value so it survives reload too.
+  const { undo, redo, clear: clearHistory, current: currentCanvas, canUndo, canRedo } =
+    useCanvasHistory();
+  const persistCanvas = useCallback((w: CompositionNode | null) => {
+    void fetch("/api/canvas", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ threadId: sessionRef.current ?? "default", widget: w }),
+    }).catch(() => {});
+  }, []);
+  const undoEdit = useCallback(() => {
+    undo();
+    persistCanvas(currentCanvas());
+  }, [undo, currentCanvas, persistCanvas]);
+  const redoEdit = useCallback(() => {
+    redo();
+    persistCanvas(currentCanvas());
+  }, [redo, currentCanvas, persistCanvas]);
 
   // Flat index of addressable elements — for @-mentions + agent context.
   const elements = useMemo(() => indexElements(widget), [widget]);
@@ -123,13 +143,31 @@ export default function WidgetComposerPage() {
     fetch(`/api/canvas?threadId=${encodeURIComponent(session)}`)
       .then((r) => r.json())
       .then((d) => {
-        if (!cancelled) setWidgetRef.current((d?.widget as CompositionNode) ?? null);
+        if (cancelled) return;
+        setWidgetRef.current((d?.widget as CompositionNode) ?? null);
+        // History is per-report: a switch/restore resets it (no cross-report undo).
+        clearHistory();
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [session, collabEnabled]);
+  }, [session, collabEnabled, clearHistory]);
+
+  // Keyboard: Cmd/Ctrl+Z undo, Shift+Cmd/Ctrl+Z redo — but never hijack typing
+  // in the chat box or any input/textarea.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      e.preventDefault();
+      if (e.shiftKey) redoEdit();
+      else undoEdit();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undoEdit, redoEdit]);
 
   // Auto-enable collaboration when the report contains an editable/collaborative
   // element — so "give me an editable thing" makes it instantly co-editable.
@@ -398,6 +436,24 @@ export default function WidgetComposerPage() {
                   >
                     Auto bricks {autoBricks ? "on" : "off"}
                   </button>
+                  <div className="flex items-center">
+                    <button
+                      onClick={undoEdit}
+                      disabled={!canUndo}
+                      title="Undo (⌘/Ctrl+Z)"
+                      className="rounded-l-[var(--radius)] border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] hover:bg-[var(--secondary)] disabled:opacity-40"
+                    >
+                      ↶
+                    </button>
+                    <button
+                      onClick={redoEdit}
+                      disabled={!canRedo}
+                      title="Redo (⇧⌘/Ctrl+Z)"
+                      className="rounded-r-[var(--radius)] border border-l-0 border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] hover:bg-[var(--secondary)] disabled:opacity-40"
+                    >
+                      ↷
+                    </button>
+                  </div>
                   <ReportsMenu currentSession={session} onOpen={setSession} />
                   <ModelMenu value={modelId} onChange={setModelId} />
                   <ExportMenu widget={widget} onImport={(t) => applyTree(t)} />

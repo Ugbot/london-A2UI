@@ -5,6 +5,7 @@
  * and live presence of connected peers.
  */
 import * as React from "react";
+import * as Y from "yjs";
 import type { CompositionNode } from "@/bricks/composition";
 import { useCollab, type CollabUser } from "./provider";
 
@@ -48,6 +49,52 @@ export function useSharedWidget(): [
   );
 
   return [widget, setWidget];
+}
+
+/**
+ * Transactional undo/redo for the canvas — "Figma with JS". The canvas tree lives
+ * in the Yjs doc, so a Y.UndoManager gives transactional, collab-aware history for
+ * free: each edit is a step, undo only reverts LOCAL changes. `current()` reads the
+ * post-undo/redo value synchronously (Yjs applies in-band) so the caller can persist
+ * it; `clear()` resets history (e.g. after switching to another report).
+ */
+export function useCanvasHistory() {
+  const { doc } = useCollab();
+  const canvas = React.useMemo(() => doc.getMap("canvas"), [doc]);
+  const undoManager = React.useMemo(
+    () => new Y.UndoManager(canvas, { captureTimeout: 250 }),
+    [canvas],
+  );
+  const [{ canUndo, canRedo }, setState] = React.useState({ canUndo: false, canRedo: false });
+
+  React.useEffect(() => {
+    const update = () =>
+      setState({ canUndo: undoManager.canUndo(), canRedo: undoManager.canRedo() });
+    undoManager.on("stack-item-added", update);
+    undoManager.on("stack-item-popped", update);
+    undoManager.on("stack-cleared", update);
+    update();
+    return () => {
+      undoManager.off("stack-item-added", update);
+      undoManager.off("stack-item-popped", update);
+      undoManager.off("stack-cleared", update);
+      undoManager.destroy();
+    };
+  }, [undoManager]);
+
+  const current = React.useCallback(
+    () => ((canvas.get("widget") as CompositionNode | undefined) ?? null),
+    [canvas],
+  );
+
+  return {
+    canUndo,
+    canRedo,
+    undo: React.useCallback(() => undoManager.undo(), [undoManager]),
+    redo: React.useCallback(() => undoManager.redo(), [undoManager]),
+    clear: React.useCallback(() => undoManager.clear(), [undoManager]),
+    current,
+  };
 }
 
 /** Live list of connected peers (excluding self) from Yjs awareness. */
