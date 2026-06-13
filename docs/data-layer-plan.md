@@ -95,6 +95,13 @@ Store additions (`src/state/store.ts`):
 - Brick props: `transform` on `ApiData`/`Repeater` (post-fetch shaping), and
   `bindCompute` on display bricks (a derived value) alongside `bindKey`/`bindField`.
 
+**Modularity rule:** all generated TS (mortar AND foundry bricks) must be *fully
+modular* — real ES modules with explicit imports/exports, one concern per module,
+composable and reusable (a mortar fn can import another). No inline snippets or
+giant single-blob sources; persisted source is a proper module, registered by id,
+importable by other generated modules. This keeps generated logic testable,
+tree-shakeable, and re-composable like the bricks themselves.
+
 Design (mirrors the foundry, but logic not components; reactive not one-shot):
 - `mortar` registry + DB table `{ id, name, description, source, signature, kind }`; agent authors via a `create_mortar` HITL tool (approval unless Auto) or the user adds one in a Mortar panel. Persisted + reloadable like `generated_bricks`.
 - Execution: transpile the TS source (sucrase/esbuild) to a function body and run in a **guarded scope** (`new Function` with a frozen, allow-listed context: inputs, a store snapshot/`get`, current record, pure helpers — NO `fetch`/`window`/`process`/network; outbound calls go through Connections, never mortar). Pure-by-contract; wired into `registerDerived` so results flow through the store. Errors caught + surfaced like a brick ErrorBoundary, never crash the canvas.
