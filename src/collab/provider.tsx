@@ -59,17 +59,42 @@ function randomUser(): CollabUser {
   return { name: `${pick(ANIMALS)}-${Math.floor(Math.random() * 900 + 100)}`, color: pick(COLORS) };
 }
 
-/** Resolve the session id from the URL, generating + persisting one if absent. */
+const SESSION_STORAGE_KEY = "a2ui-session";
+
+/**
+ * Resolve the session id (the canvas/DB key) with stable precedence:
+ *   URL ?session=  >  localStorage (last session)  >  newly generated.
+ *
+ * Persisting to localStorage is what makes a plain reload (no ?session= in the
+ * URL) restore your LAST canvas instead of minting a blank new session. The id
+ * is also written back to the URL so the session stays shareable.
+ */
 function resolveSession(): string {
   const params = new URLSearchParams(window.location.search);
   let session = params.get("session");
+
+  if (!session && typeof localStorage !== "undefined") {
+    try {
+      session = localStorage.getItem(SESSION_STORAGE_KEY);
+    } catch {
+      /* storage blocked (private mode) — fall through to generate */
+    }
+  }
+
   if (!session) {
     session =
       typeof crypto !== "undefined" && crypto.randomUUID
         ? crypto.randomUUID().slice(0, 8)
         : Math.random().toString(36).slice(2, 10);
-    params.set("session", session);
-    window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+  }
+
+  // Reflect the resolved session in the URL (shareable) and remember it.
+  params.set("session", session);
+  window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+  try {
+    localStorage.setItem(SESSION_STORAGE_KEY, session);
+  } catch {
+    /* ignore */
   }
   return session;
 }
