@@ -49,3 +49,6 @@ next-env.d.ts
 venv
 .venv
 __pycache__
+
+# dbos local state
+.dbos/
