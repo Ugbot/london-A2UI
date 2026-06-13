@@ -75,6 +75,34 @@ All via `schemas.ts`→`components.tsx`→`defs.ts` (auto-registered; `ensureCac
 ### Phase 6 — Visual Data panel (low risk)
 - `src/components/DataPanel.tsx` (new, follow `ReportsMenu` dropdown structure), rendered in `page.tsx` `headerExtra`. MVP: list connections (redacted; "secret set" badge from `hasSecret`); add connection (manual or OpenAPI URL/JSON); enter/update secret (write-only endpoint; shows `••••` when set); view endpoints; delete. Stretch: visual field-binding (click input → assign `bindKey`; pick connection+endpoint for a Form/ApiData) and a "Test" button via `call_api`.
 
+### Phase 6.5 — Mortar: reactive TS logic on a proper state store
+The whole app already runs on a reactive keyed store (`src/state/store.ts`
+Zustand + `useElementData`/`bindKey`); **mortar** is typed logic layered onto that
+SAME store so everything is real-time. The store is the single source of truth:
+data sources write keys, bricks subscribe to keys (`bindKey`), and **mortar
+registers DERIVED keys** that recompute automatically when their inputs change —
+the "React magic" is the store's subscription graph propagating updates to every
+bound brick instantly. Bricks = view, store = reactive state, mortar = the typed
+derivations/effects between them.
+
+Store additions (`src/state/store.ts`):
+- `registerDerived(key, deps[], fn)` — a computed key: subscribe to `deps`, and
+  whenever any changes, recompute `fn({ deps, get })` and `set(key, …)`. Bricks
+  bound to `key` re-render live. This is the reactive backbone for mortar.
+- Mortar functions plug in as the `fn`: **transforms** (dataset raw → brick shape,
+  richer than `jsonPath`), **computed bindings** (`total = sum(items.price)`,
+  formatting), and **actions** (run on `ActionButton`/`Form`, may `set` many keys).
+- Brick props: `transform` on `ApiData`/`Repeater` (post-fetch shaping), and
+  `bindCompute` on display bricks (a derived value) alongside `bindKey`/`bindField`.
+
+Design (mirrors the foundry, but logic not components; reactive not one-shot):
+- `mortar` registry + DB table `{ id, name, description, source, signature, kind }`; agent authors via a `create_mortar` HITL tool (approval unless Auto) or the user adds one in a Mortar panel. Persisted + reloadable like `generated_bricks`.
+- Execution: transpile the TS source (sucrase/esbuild) to a function body and run in a **guarded scope** (`new Function` with a frozen, allow-listed context: inputs, a store snapshot/`get`, current record, pure helpers — NO `fetch`/`window`/`process`/network; outbound calls go through Connections, never mortar). Pure-by-contract; wired into `registerDerived` so results flow through the store. Errors caught + surfaced like a brick ErrorBoundary, never crash the canvas.
+- New: `src/mortar/registry.ts`, `src/mortar/run.ts` (transpile+sandbox), `src/server/mortar.ts` (persist), `src/app/api/mortar/route.ts`, a `create_mortar` tool, `MortarPanel`; plus `registerDerived` in `store.ts`.
+- Tests: `registerDerived` recomputes on dep change and updates subscribers; sandbox escapes blocked (`fetch`/`process`/`globalThis` unavailable); a transform maps a sample payload; bad source is caught not thrown.
+
+Sequence mortar AFTER Phase 4 (it plugs into ApiData/Repeater/bindings + the store); ship `registerDerived` + transforms first (highest value for CMS/dataset mapping), then computed bindings, then actions.
+
 ### Phase 7 — Stretch
 GraphQL connection type (common for headless CMS); data-bound `MasterDetail`; request-time IP pinning for full DNS-rebind safety; dataset result caching/pagination; SQL connection (true Superset parity) behind the proxy.
 
