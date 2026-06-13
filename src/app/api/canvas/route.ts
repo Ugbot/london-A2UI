@@ -6,7 +6,7 @@
  * composition tree, not arbitrary blobs), and errors are sanitised (logged
  * server-side, generic message to the client).
  */
-import { loadCanvas, saveCanvas } from "@/server/cache";
+import { loadCanvas, saveCanvas, listCanvases } from "@/server/cache";
 
 export const runtime = "nodejs";
 
@@ -20,7 +20,16 @@ function fail(message: string, status: number) {
 
 export async function GET(req: Request) {
   const threadId = new URL(req.url).searchParams.get("threadId");
-  if (!threadId || !ID_RE.test(threadId)) {
+  // No threadId → return the list of saved reports (for the open-report picker).
+  if (!threadId) {
+    try {
+      return Response.json({ canvases: await listCanvases() });
+    } catch (err) {
+      console.error("[canvas:list]", err);
+      return fail("failed to list canvases", 500);
+    }
+  }
+  if (!ID_RE.test(threadId)) {
     return fail("valid threadId required", 400);
   }
   try {

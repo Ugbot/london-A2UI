@@ -201,6 +201,48 @@ export async function loadCanvas(threadId: string): Promise<unknown | null> {
   return rows[0]?.widget ?? null;
 }
 
+/** A saved report (canvas) summary for the "open report" list. */
+export interface CanvasSummary {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
+/** Derive a human title from a composition tree (first heading/title, else root brick). */
+function canvasTitle(widget: unknown): string {
+  const seen = new Set<unknown>();
+  const walk = (n: unknown): string | null => {
+    if (!n || typeof n !== "object" || seen.has(n)) return null;
+    seen.add(n);
+    const node = n as { brick?: string; props?: Record<string, unknown>; children?: unknown[] };
+    const p = node.props ?? {};
+    if (node.brick === "Heading" && typeof p.text === "string" && p.text.trim()) return p.text.trim();
+    if (typeof p.title === "string" && p.title.trim()) return p.title.trim();
+    for (const c of node.children ?? []) {
+      const t = walk(c);
+      if (t) return t;
+    }
+    return null;
+  };
+  return walk(widget) ?? (widget as { brick?: string })?.brick ?? "Untitled report";
+}
+
+/** List saved canvases (most-recent first) for the open-report picker. */
+export async function listCanvases(limit = 50): Promise<CanvasSummary[]> {
+  await migrate();
+  const pool = await getPool();
+  const { rows } = await pool.query(
+    `SELECT thread_id, widget, updated_at
+       FROM canvases ORDER BY updated_at DESC LIMIT $1`,
+    [limit],
+  );
+  return rows.map((r) => ({
+    id: r.thread_id as string,
+    title: canvasTitle(r.widget),
+    updatedAt: (r.updated_at as Date).toISOString(),
+  }));
+}
+
 /** Persist a session's chat transcript (AG-UI message array). */
 export async function saveChat(sessionId: string, messages: unknown): Promise<void> {
   await migrate();

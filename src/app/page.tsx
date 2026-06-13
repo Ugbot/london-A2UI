@@ -19,6 +19,7 @@ import { WidgetCanvas } from "@/components/WidgetCanvas";
 import { MentionOverlay } from "@/components/MentionOverlay";
 import { ExportMenu } from "@/components/ExportMenu";
 import { ModelMenu } from "@/components/ModelMenu";
+import { ReportsMenu } from "@/components/ReportsMenu";
 import { ChatPersistence } from "@/components/ChatPersistence";
 import { DEFAULT_MODEL_ID } from "@/mastra/models";
 import { WidgetPreviewCard, AskUserCard, FoundryCard } from "@/components/chat-cards";
@@ -405,6 +406,7 @@ export default function WidgetComposerPage() {
                   >
                     Auto bricks {autoBricks ? "on" : "off"}
                   </button>
+                  <ReportsMenu currentSession={session} />
                   <ModelMenu value={modelId} onChange={setModelId} />
                   <ExportMenu widget={widget} onImport={(t) => applyTree(t)} />
                   <StyleMenu />
