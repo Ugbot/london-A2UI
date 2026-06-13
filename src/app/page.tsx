@@ -7,7 +7,7 @@ import {
   CopilotSidebar,
 } from "@copilotkit/react-core/v2";
 import type { CSSProperties } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 
 import { ThreadsDrawer } from "@/components/threads-drawer";
@@ -36,6 +36,25 @@ export default function WidgetComposerPage() {
   const [status, setStatus] = useState<RenderStatus | null>(null);
   const { toggleLayer, clearLayers } = useStyleLayers();
   const { enable: enableCollab, disable: disableCollab } = useCollab();
+
+  // Keep a stable ref to the (thread-scoped) setter for the load effect.
+  const setWidgetRef = useRef(setWidget);
+  setWidgetRef.current = setWidget;
+
+  // Restore a thread's canvas from the DB when switching threads / on load.
+  useEffect(() => {
+    const key = threadId ?? "default";
+    let cancelled = false;
+    fetch(`/api/canvas?threadId=${encodeURIComponent(key)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && d?.widget) setWidgetRef.current(d.widget);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [threadId]);
 
   // Let the agent recolor the assistant accent.
   useFrontendTool({
@@ -68,6 +87,12 @@ export default function WidgetComposerPage() {
       }
       setWidget(result.value);
       setStatus({ ok: true });
+      // Persist this thread's canvas so opening the chat later restores it.
+      void fetch("/api/canvas", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ threadId: threadId ?? "default", widget: result.value }),
+      }).catch(() => {});
       return "Rendered successfully.";
     },
     // Show the assembled widget as a live preview in chat — not raw JSON.

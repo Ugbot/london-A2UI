@@ -8,17 +8,9 @@
  * an OpenAI key.
  */
 import { Agent } from "@mastra/core/agent";
-import { createOpenAI } from "@ai-sdk/openai";
 import { cacheTools } from "./tools";
 import { SYSTEM_PROMPT } from "./prompt";
-
-const provider = createOpenAI({
-  // Unset → https://api.openai.com/v1. Set to e.g. http://localhost:11434/v1 for Ollama.
-  baseURL: process.env.OPENAI_BASE_URL,
-  apiKey: process.env.OPENAI_API_KEY ?? "",
-});
-
-const MODEL = process.env.AGENT_MODEL ?? "gpt-4.1-mini";
+import { provider, MODEL } from "./provider";
 
 export const widgetAgent = new Agent({
   id: "widget-composer",

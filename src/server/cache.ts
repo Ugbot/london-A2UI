@@ -177,5 +177,29 @@ export async function bakePartial(input: {
   return { id: inserted.rows[0].id, merged: false, name: input.name, holeCount: holes.length };
 }
 
+/** Persist a thread's canvas composition tree so it can be restored later. */
+export async function saveCanvas(threadId: string, widget: unknown): Promise<void> {
+  await migrate();
+  const pool = await getPool();
+  await pool.query(
+    `INSERT INTO canvases (thread_id, widget, updated_at)
+     VALUES ($1, $2::jsonb, now())
+     ON CONFLICT (thread_id) DO UPDATE
+       SET widget = EXCLUDED.widget, updated_at = now()`,
+    [threadId, JSON.stringify(widget)],
+  );
+}
+
+/** Load a thread's saved canvas composition tree, or null if none. */
+export async function loadCanvas(threadId: string): Promise<unknown | null> {
+  await migrate();
+  const pool = await getPool();
+  const { rows } = await pool.query(
+    `SELECT widget FROM canvases WHERE thread_id = $1`,
+    [threadId],
+  );
+  return rows[0]?.widget ?? null;
+}
+
 /** Re-export for tools that surface the brick catalog. */
 export { brickCatalog };

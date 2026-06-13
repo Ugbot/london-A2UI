@@ -103,6 +103,15 @@ export function migrate(): Promise<void> {
         )
       `);
 
+      // Per-thread canvas snapshots so a previous chat restores its widget.
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS canvases (
+          thread_id  text PRIMARY KEY,
+          widget     jsonb NOT NULL,
+          updated_at timestamptz NOT NULL DEFAULT now()
+        )
+      `);
+
       await client.query(
         `CREATE INDEX IF NOT EXISTS bricks_embedding_idx
            ON bricks USING hnsw (embedding vector_cosine_ops)`,

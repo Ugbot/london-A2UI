@@ -8,7 +8,6 @@
  */
 import { Agent } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
-import { createOpenAI } from "@ai-sdk/openai";
 import { z } from "zod";
 import { brickCatalog, registry } from "../src/bricks/registry";
 import {
@@ -17,6 +16,7 @@ import {
   type CompositionNode,
 } from "../src/bricks/composition";
 import { SYSTEM_PROMPT } from "../src/mastra/prompt";
+import { provider, MODEL } from "../src/mastra/provider";
 
 const state: { tree: CompositionNode | null; rendered: boolean; attempts: number } = {
   tree: null,
@@ -54,13 +54,11 @@ const renderWidget = createTool({
   },
 });
 
-const provider = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
 const agent = new Agent({
   id: "widget-composer-test",
   name: "widget-composer-test",
   instructions: SYSTEM_PROMPT,
-  model: provider(process.env.AGENT_MODEL ?? "gpt-4.1-mini"),
+  model: provider(MODEL),
   tools: { list_bricks: listBricks, render_widget: renderWidget },
 });
 

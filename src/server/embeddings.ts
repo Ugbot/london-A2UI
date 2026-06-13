@@ -53,13 +53,23 @@ export async function embedBatch(texts: string[]): Promise<number[][]> {
   return vectors;
 }
 
+// Cache single-text embeddings (search queries repeat; brick/partial text is
+// stable) so we don't re-hit Ollama for identical inputs. Bounded to avoid
+// unbounded growth.
+const embedCache = new Map<string, number[]>();
+const EMBED_CACHE_MAX = 1000;
+
 /**
- * Embed a single text.
+ * Embed a single text, memoized.
  *
  * @param text - Input to embed.
  * @returns A single 768-dim vector.
  */
 export async function embed(text: string): Promise<number[]> {
+  const cached = embedCache.get(text);
+  if (cached) return cached;
   const [vector] = await embedBatch([text]);
+  if (embedCache.size >= EMBED_CACHE_MAX) embedCache.clear();
+  embedCache.set(text, vector);
   return vector;
 }
