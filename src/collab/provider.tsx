@@ -118,7 +118,11 @@ export function CollabProvider({ children }: { children: React.ReactNode }) {
   // and its DB persistence, so it must not change when collab toggles or when
   // chat threads switch.
   React.useEffect(() => {
-    setSession((s) => s ?? resolveSession());
+    // Resolve in the effect body (post-commit) — NOT inside the setState updater,
+    // which React may run during render; resolveSession calls history.replaceState
+    // (patched by Next's Router) and would update the Router mid-render.
+    const resolved = resolveSession();
+    setSession((s) => s ?? resolved);
   }, []);
 
   // Connect ONLY when collaboration is enabled. Cleanup on disable/unmount.
