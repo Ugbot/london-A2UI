@@ -3,6 +3,7 @@
 /** Copies the current session URL so others can join the same collaborative room. */
 import { useState } from "react";
 import { useCollab } from "./provider";
+import { Tooltip } from "../components/ui/Tooltip";
 
 export function ShareButton() {
   const { session } = useCollab();
@@ -22,12 +23,13 @@ export function ShareButton() {
 
   if (!session) return null;
   return (
-    <button
-      onClick={share}
-      title="Copy a shareable link to this session"
-      className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--secondary)]"
-    >
-      {copied ? "Link copied ✓" : "Share"}
-    </button>
+    <Tooltip text="Copy a link to this session so others can join live.">
+      <button
+        onClick={share}
+        className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--secondary)]"
+      >
+        {copied ? "Link copied ✓" : "Share"}
+      </button>
+    </Tooltip>
   );
 }

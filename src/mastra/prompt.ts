@@ -63,7 +63,8 @@ Editing / refining the current widget:
 - To "make it live": set a bindKey on the target via edit_element and add a
   "DataSource" (or use a live brick like CryptoChart/CandlestickChart).
 - Only call "render_widget" for a brand-new widget or a full restructure.
-- Resolve "@id" mentions in the user's message to that element's id.
+- Resolve "@id" mentions in the user's message to that element's id. If you are
+  unsure of the current structure/ids, call "get_current_widget" first.
 
 Building stateful / interactive apps:
 - Many bricks accept a "bindKey": charts, StatCard, Table, Text and ProgressBar

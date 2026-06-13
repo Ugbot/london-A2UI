@@ -121,25 +121,42 @@ export function FoundryCard({
     if (!respond) return;
     setState("building");
     try {
+      // Kick off the (possibly slow, npm-installing) job; it returns a handle now.
       const res = await fetch("/api/foundry", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(spec),
       });
-      const data = await res.json();
-      if (!res.ok || data.error) {
+      const start = await res.json();
+      if (!res.ok || start.error || !start.jobId) {
         setState("error");
-        setMessage(data.error ?? `HTTP ${res.status}`);
-        await respond(`Brick creation failed: ${data.error ?? res.status}. ${data.detail ?? ""}`);
+        setMessage(start.error ?? `HTTP ${res.status}`);
+        await respond(`Brick creation failed: ${start.error ?? res.status}.`);
         return;
       }
-      setState("done");
-      setMessage(
-        `Created "${data.name}"${data.installed ? ` (installed ${data.installed})` : ""}.`,
-      );
-      await respond(
-        `Created brick "${data.name}"${data.installed ? ` backed by ${data.installed}` : ""}. It is now available — use it in the widget.`,
-      );
+      // Poll the background job until it finishes (up to ~4 min).
+      const deadline = Date.now() + 240_000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 1500));
+        const job = await (await fetch(`/api/foundry?jobId=${start.jobId}`)).json();
+        if (job.status === "done") {
+          setState("done");
+          setMessage(job.message ?? `Created "${spec.name}".`);
+          await respond(
+            `Created brick "${job.name}"${job.installed ? ` backed by ${job.installed}` : ""}. It is now available — use it in the widget.`,
+          );
+          return;
+        }
+        if (job.status === "error") {
+          setState("error");
+          setMessage(`${job.message ?? "failed"}${job.detail ? `: ${job.detail}` : ""}`);
+          await respond(`Brick creation failed: ${job.message ?? "error"}. ${job.detail ?? ""}`);
+          return;
+        }
+      }
+      setState("error");
+      setMessage("Timed out building the brick.");
+      await respond("Brick creation timed out.");
     } catch (err) {
       setState("error");
       setMessage(String(err));

@@ -16,6 +16,7 @@ import { ThreadsPanelGate } from "@/components/threads-drawer/locked-state";
 import styles from "@/components/threads-drawer/threads-drawer.module.css";
 
 import { WidgetCanvas } from "@/components/WidgetCanvas";
+import { MentionOverlay } from "@/components/MentionOverlay";
 import { WidgetPreviewCard, AskUserCard, FoundryCard } from "@/components/chat-cards";
 import { useMentionStore } from "@/state/mentionStore";
 import { useFoundryStore } from "@/state/foundryStore";
@@ -139,6 +140,21 @@ export default function WidgetComposerPage() {
   });
 
   // --- In-place editing: refine the CURRENT widget by element id (@-targeting). ---
+  // The agent's window into the live canvas. (useAgentContext only reaches
+  // requestContext, not the LLM prompt, so the agent must fetch state via a tool.)
+  useFrontendTool({
+    name: "get_current_widget",
+    description:
+      "Return the CURRENT widget on the canvas as a composition tree plus a flat list of its addressable elements (id, brick, label) and the user's current @-selection. ALWAYS call this FIRST when the user asks to change/refine/edit anything, so you can target existing elements by id with edit_element instead of rebuilding from scratch.",
+    parameters: z.object({}),
+    handler: async () =>
+      JSON.stringify({
+        widget: widgetRef.current ?? null,
+        elements: indexElements(widgetRef.current),
+        selected: useMentionStore.getState().targetId,
+      }),
+  });
+
   useFrontendTool({
     name: "edit_element",
     description:
@@ -354,6 +370,7 @@ export default function WidgetComposerPage() {
                 </div>
               }
             />
+            <MentionOverlay elements={elements} />
             <CopilotSidebar
               defaultOpen={true}
               labels={{
