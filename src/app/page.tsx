@@ -46,13 +46,12 @@ import { STYLE_PRESETS, useStyleLayers } from "@/style/StyleLayers";
 export default function WidgetComposerPage() {
   const [themeColor, setThemeColor] = useState("#6366f1");
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
-  // The widget tree is collaborative AND per-thread: shared via Yjs so renders
-  // and edits propagate live, keyed by thread so switching threads reloads that
-  // thread's canvas.
-  const [widget, setWidget] = useSharedWidget(threadId);
+  const { enabled: collabEnabled, enable: enableCollab, disable: disableCollab } = useCollab();
+  // Canvas widget: per-thread when solo, SHARED across the session when
+  // collaborating (so edits actually propagate between people).
+  const [widget, setWidget] = useSharedWidget(threadId, collabEnabled);
   const [status, setStatus] = useState<RenderStatus | null>(null);
   const { toggleLayer, clearLayers } = useStyleLayers();
-  const { enable: enableCollab, disable: disableCollab } = useCollab();
   const { auto: autoBricks, setAuto: setAutoBricks } = useFoundryStore();
 
   // Keep stable refs so frontend-tool handlers always see the latest widget +
@@ -100,7 +99,10 @@ export default function WidgetComposerPage() {
   };
 
   // Restore a thread's canvas from the DB when switching threads / on load.
+  // Skip while collaborating — the shared session doc is the source of truth and
+  // we must not clobber peers' edits with a DB snapshot.
   useEffect(() => {
+    if (collabEnabled) return;
     const key = threadId ?? "default";
     let cancelled = false;
     fetch(`/api/canvas?threadId=${encodeURIComponent(key)}`)
@@ -112,7 +114,17 @@ export default function WidgetComposerPage() {
     return () => {
       cancelled = true;
     };
-  }, [threadId]);
+  }, [threadId, collabEnabled]);
+
+  // Auto-enable collaboration when the report contains an editable/collaborative
+  // element — so "give me an editable thing" makes it instantly co-editable.
+  useEffect(() => {
+    if (collabEnabled || !widget) return;
+    const COLLAB_BRICKS = new Set(["CollabText", "CollabChat"]);
+    const hasEditable = (n: typeof widget): boolean =>
+      !!n && (COLLAB_BRICKS.has(n.brick) || (n.children ?? []).some(hasEditable));
+    if (hasEditable(widget)) enableCollab();
+  }, [widget, collabEnabled, enableCollab]);
 
   // Let the agent recolor the assistant accent.
   useFrontendTool({
