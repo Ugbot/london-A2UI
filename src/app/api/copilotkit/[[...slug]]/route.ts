@@ -15,12 +15,23 @@ import { widgetAgent } from "@/mastra/agent";
 export const runtime = "nodejs";
 
 // 1. Create the CopilotRuntime instance with our in-process Mastra agent.
+//
+// Thread management: we default to the LOCAL InMemoryAgentRunner so thread ids
+// are created on demand for whatever id the client supplies (e.g. a stable
+// `thread-<session>`). The hosted Intelligence gateway owns/validates thread ids
+// itself — supplying an explicit id it didn't mint returns "Failed to initialize
+// thread", and it was the source of intermittent 502s / "thread locked" errors.
+// Opt back into Intelligence explicitly with USE_COPILOT_INTELLIGENCE=1.
+const useIntelligence =
+  process.env.USE_COPILOT_INTELLIGENCE === "1" &&
+  !!process.env.COPILOTKIT_LICENSE_TOKEN;
+
 const copilotRuntime = new CopilotRuntime({
   agents: {
     default: new MastraAgent({ agent: widgetAgent }),
   },
-  // --- copilotkit:intelligence (remove this block to opt out) ---
-  ...(process.env.COPILOTKIT_LICENSE_TOKEN
+  // --- copilotkit:intelligence (opt-in via USE_COPILOT_INTELLIGENCE=1) ---
+  ...(useIntelligence
     ? {
         intelligence: new CopilotKitIntelligence({
           apiKey: process.env.INTELLIGENCE_API_KEY ?? "",

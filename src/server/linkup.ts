@@ -22,26 +22,45 @@ export interface SourcedAnswer {
   sources: LinkupSource[];
 }
 
-/** The raw Linkup call, registered as a DBOS step so it retries on flaky network. */
-const linkupStep = DBOS.registerStep(
-  (query: string, depth: "standard" | "deep") => linkupFetch(query, depth),
-  {
-    name: "linkup.search",
-    ...FLAKY_RETRY,
-    // Retry only transient network / 5xx errors — not auth, bad query, or
-    // out-of-funds (4xx/429), which won't recover within a few attempts.
-    shouldRetry: (e) =>
-      /fetch failed|ECONNRESET|ETIMEDOUT|network|socket|50[0234]/i.test(
-        String(e instanceof Error ? e.message : e),
-      ),
-  },
-);
+// DBOS registers operations by name into a PROCESS-GLOBAL registry. In dev,
+// Turbopack HMR re-evaluates this module on edits, which would call
+// registerStep/registerWorkflow a second time and throw "Operation (Name:
+// .research) is already registered". Cache the registrations on globalThis so a
+// re-eval reuses the existing ones instead of re-registering.
+type ResearchFn = (query: string, depth: "standard" | "deep") => Promise<SourcedAnswer>;
+const dbosReg = globalThis as typeof globalThis & {
+  __linkupResearchWorkflow?: ResearchFn;
+};
 
-/** Durable workflow wrapping the research call (checkpointed + recoverable). */
-const researchWorkflow = DBOS.registerWorkflow(
-  (query: string, depth: "standard" | "deep") => linkupStep(query, depth),
-  { name: "research" },
-);
+function registerResearchWorkflow(): ResearchFn {
+  if (dbosReg.__linkupResearchWorkflow) return dbosReg.__linkupResearchWorkflow;
+
+  /** The raw Linkup call, registered as a DBOS step so it retries on flaky network. */
+  const linkupStep = DBOS.registerStep(
+    (query: string, depth: "standard" | "deep") => linkupFetch(query, depth),
+    {
+      name: "linkup.search",
+      ...FLAKY_RETRY,
+      // Retry only transient network / 5xx errors — not auth, bad query, or
+      // out-of-funds (4xx/429), which won't recover within a few attempts.
+      shouldRetry: (e) =>
+        /fetch failed|ECONNRESET|ETIMEDOUT|network|socket|50[0234]/i.test(
+          String(e instanceof Error ? e.message : e),
+        ),
+    },
+  );
+
+  /** Durable workflow wrapping the research call (checkpointed + recoverable). */
+  const workflow = DBOS.registerWorkflow(
+    (query: string, depth: "standard" | "deep") => linkupStep(query, depth),
+    { name: "research" },
+  );
+
+  dbosReg.__linkupResearchWorkflow = workflow;
+  return workflow;
+}
+
+const researchWorkflow = registerResearchWorkflow();
 
 /**
  * Run a sourced-answer web search via Linkup with DURABLE EXECUTION: the call is

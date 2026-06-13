@@ -88,6 +88,14 @@ export function CollabProvider({ children }: { children: React.ReactNode }) {
   const enable = React.useCallback(() => setEnabled(true), []);
   const disable = React.useCallback(() => setEnabled(false), []);
 
+  // Resolve the session id once on mount (client only), independent of whether
+  // collaboration is enabled. The session is the STABLE key for the canvas doc
+  // and its DB persistence, so it must not change when collab toggles or when
+  // chat threads switch.
+  React.useEffect(() => {
+    setSession((s) => s ?? resolveSession());
+  }, []);
+
   // Connect ONLY when collaboration is enabled. Cleanup on disable/unmount.
   React.useEffect(() => {
     if (!enabled) return;
@@ -110,7 +118,7 @@ export function CollabProvider({ children }: { children: React.ReactNode }) {
       setProvider(null);
       setConnected(false);
       setUser(null);
-      setSession(null);
+      // Keep `session` — it is the stable canvas/DB key, not collab-scoped.
     };
   }, [enabled, doc]);
 

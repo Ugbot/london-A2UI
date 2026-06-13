@@ -18,6 +18,8 @@ import styles from "@/components/threads-drawer/threads-drawer.module.css";
 import { WidgetCanvas } from "@/components/WidgetCanvas";
 import { MentionOverlay } from "@/components/MentionOverlay";
 import { ExportMenu } from "@/components/ExportMenu";
+import { ModelMenu } from "@/components/ModelMenu";
+import { DEFAULT_MODEL_ID } from "@/mastra/models";
 import { WidgetPreviewCard, AskUserCard, FoundryCard } from "@/components/chat-cards";
 import { useMentionStore } from "@/state/mentionStore";
 import { useFoundryStore } from "@/state/foundryStore";
@@ -47,10 +49,13 @@ import { STYLE_PRESETS, useStyleLayers } from "@/style/StyleLayers";
 export default function WidgetComposerPage() {
   const [themeColor, setThemeColor] = useState("#6366f1");
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
-  const { enabled: collabEnabled, enable: enableCollab, disable: disableCollab } = useCollab();
-  // Canvas widget: per-thread when solo, SHARED across the session when
-  // collaborating (so edits actually propagate between people).
-  const [widget, setWidget] = useSharedWidget(threadId, collabEnabled);
+  const [modelId, setModelId] = useState<string>(DEFAULT_MODEL_ID);
+  const { enabled: collabEnabled, enable: enableCollab, disable: disableCollab, session } = useCollab();
+  // Canvas widget: ONE document per session, on a stable key. The same doc is
+  // used solo and collaborative (turning collab on just syncs it), and it is
+  // NOT tied to the chat thread — switching threads / sending messages no longer
+  // blanks the canvas or makes edits target an empty tree.
+  const [widget, setWidget] = useSharedWidget();
   const [status, setStatus] = useState<RenderStatus | null>(null);
   const { toggleLayer, clearLayers } = useStyleLayers();
   const { auto: autoBricks, setAuto: setAutoBricks } = useFoundryStore();
@@ -61,8 +66,9 @@ export default function WidgetComposerPage() {
   setWidgetRef.current = setWidget;
   const widgetRef = useRef(widget);
   widgetRef.current = widget;
-  const threadRef = useRef(threadId);
-  threadRef.current = threadId;
+  // The canvas persists per SESSION (stable), not per chat thread.
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
 
   // Flat index of addressable elements — for @-mentions + agent context.
   const elements = useMemo(() => indexElements(widget), [widget]);
@@ -77,6 +83,10 @@ export default function WidgetComposerPage() {
       "The current widget on the canvas (composition tree), its addressable elements (each with a stable id), and `selected` — the element the user has clicked-to-target (if any). Use this to EDIT the existing widget on follow-up requests, to resolve @element-id mentions, and when the user says 'this/it' without an id, prefer the `selected` element.",
     value: JSON.stringify({ widget: widget ?? null, elements, selected: selectedId }),
   });
+
+  // Runtime model selection: a plumbing channel (sentinel description) the agent
+  // reads to pick the LLM per-turn. Switching the dropdown changes the model live.
+  useAgentContext({ description: "__model__", value: modelId });
 
   /** Validate, assign ids, render to canvas, and persist. Shared by all edits. */
   const applyTree = (tree: unknown): string => {
@@ -94,19 +104,29 @@ export default function WidgetComposerPage() {
     void fetch("/api/canvas", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ threadId: threadRef.current ?? "default", widget: withIds }),
+      body: JSON.stringify({ threadId: sessionRef.current ?? "default", widget: withIds }),
     }).catch(() => {});
     return "Rendered successfully.";
   };
 
-  // Restore a thread's canvas from the DB when switching threads / on load.
-  // Skip while collaborating — the shared session doc is the source of truth and
-  // we must not clobber peers' edits with a DB snapshot.
+  // Make the chat thread EXPLICIT and stable. Left undefined, CopilotKit
+  // silently mints a fresh throwaway thread per run — messages scatter across
+  // detached threads, edits miss the canvas context, and runs collide ("thread
+  // locked"). Default the thread to the session so chat, canvas, agent context,
+  // and the threads drawer all share ONE known thread. The user can still pick
+  // another thread in the drawer (onThreadChange).
   useEffect(() => {
-    if (collabEnabled) return;
-    const key = threadId ?? "default";
+    if (session && !threadId) setThreadId(`thread-${session}`);
+  }, [session, threadId]);
+
+  // Restore the session's canvas from the DB on load (once the session id is
+  // known). Keyed by session, not thread — switching chat threads no longer
+  // reloads/blanks the canvas. Skip while collaborating: the shared doc is the
+  // source of truth and a DB snapshot must not clobber peers' edits.
+  useEffect(() => {
+    if (collabEnabled || !session) return;
     let cancelled = false;
-    fetch(`/api/canvas?threadId=${encodeURIComponent(key)}`)
+    fetch(`/api/canvas?threadId=${encodeURIComponent(session)}`)
       .then((r) => r.json())
       .then((d) => {
         if (!cancelled && d?.widget) setWidgetRef.current(d.widget);
@@ -115,16 +135,21 @@ export default function WidgetComposerPage() {
     return () => {
       cancelled = true;
     };
-  }, [threadId, collabEnabled]);
+  }, [session, collabEnabled]);
 
   // Auto-enable collaboration when the report contains an editable/collaborative
   // element — so "give me an editable thing" makes it instantly co-editable.
+  // Guarded so it fires at most once (rapid widget edits can't thrash the WS).
+  const autoCollabFired = useRef(false);
   useEffect(() => {
-    if (collabEnabled || !widget) return;
+    if (collabEnabled || autoCollabFired.current || !widget) return;
     const COLLAB_BRICKS = new Set(["CollabText", "CollabChat"]);
     const hasEditable = (n: typeof widget): boolean =>
       !!n && (COLLAB_BRICKS.has(n.brick) || (n.children ?? []).some(hasEditable));
-    if (hasEditable(widget)) enableCollab();
+    if (hasEditable(widget)) {
+      autoCollabFired.current = true;
+      enableCollab();
+    }
   }, [widget, collabEnabled, enableCollab]);
 
   // Let the agent recolor the assistant accent.
@@ -378,6 +403,7 @@ export default function WidgetComposerPage() {
                   >
                     Auto bricks {autoBricks ? "on" : "off"}
                   </button>
+                  <ModelMenu value={modelId} onChange={setModelId} />
                   <ExportMenu widget={widget} onImport={(t) => applyTree(t)} />
                   <StyleMenu />
                   <CollabControls />

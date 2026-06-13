@@ -97,10 +97,12 @@ export function MentionOverlay({ elements }: { elements: ElementRef[] }) {
 
   if (!open || filtered.length === 0 || !rect || typeof document === "undefined") return null;
 
+  // Anchor the dropdown SNUG to the top edge of the chat input (grows upward),
+  // full input width — an inline combobox, like @-mentions in OpenAI/Claude/Slack.
   return createPortal(
     <ul
-      className="fixed z-[1000] max-h-60 overflow-auto rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] p-1 text-[var(--card-foreground)] shadow-lg"
-      style={{ left: rect.left, top: rect.top - Math.min(filtered.length * 36 + 10, 260), width: Math.max(rect.width, 240) }}
+      className="fixed z-[1000] max-h-72 overflow-auto rounded-t-[var(--radius)] border border-b-0 border-[var(--border)] bg-[var(--card)] p-1 text-[var(--card-foreground)] shadow-[0_-8px_24px_rgba(0,0,0,0.12)]"
+      style={{ left: rect.left, bottom: window.innerHeight - rect.top + 4, width: rect.width }}
     >
       <li className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">
         ↑/↓ to navigate · Enter to insert
