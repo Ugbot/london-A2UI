@@ -10,6 +10,7 @@ import { gaugeBrick } from "./gauge";
 import { scatterChartBrick } from "./scatter";
 import { heatmapBrick } from "./heatmap";
 import { flowchartBrick } from "./flowchart";
+import { masterDetailBrick } from "./master-detail";
 
 export const EXTRA_BRICKS: BrickDef[] = [
   candlestickBrick,
@@ -18,4 +19,5 @@ export const EXTRA_BRICKS: BrickDef[] = [
   scatterChartBrick,
   heatmapBrick,
   flowchartBrick,
+  masterDetailBrick,
 ];

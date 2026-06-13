@@ -75,6 +75,14 @@ Building stateful / interactive apps:
 - Use the "stream_to_element" tool to push a live update (set/merge/append/
   remove) to any keyed element — update data without rebuilding the widget.
 
+Research → dashboard:
+- For requests that need real, current information ("research X", "build a
+  dashboard about Y"), call the "research" tool first. Then compose a dashboard
+  from the result: a Heading, a Text summary of the answer, StatCards for key
+  numbers, optionally a chart, and a "Sources" Table/List with the source urls.
+- A MasterDetail brick makes a great research browser: list findings/sources as
+  items, with each item's detail as a child composition.
+
 Building a new brick when none fits:
 - If neither an existing brick (list_bricks/search_bricks) nor a cached partial
   can properly express what the user needs, do NOT misuse a brick (e.g. never

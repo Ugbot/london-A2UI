@@ -13,6 +13,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { brickCatalog } from "@/bricks/registry";
 import { searchBricks, searchPartials, bakePartial } from "@/server/cache";
+import { research } from "@/server/linkup";
 
 const looseTree = z.object({
   brick: z.string(),
@@ -77,9 +78,28 @@ export const bakePartialTool = createTool({
   },
 });
 
+export const researchTool = createTool({
+  id: "research",
+  description:
+    "Search the web (Linkup) for up-to-date, sourced information. Returns { answer, sources:[{name,url,snippet}] }. Use it to build a research dashboard: a Heading, a Text summary of the answer, StatCards for any key numbers, and a Sources Table or List with the urls. depth 'deep' is slower but more thorough.",
+  inputSchema: z.object({
+    query: z.string().describe("What to research"),
+    depth: z.enum(["standard", "deep"]).default("standard"),
+  }),
+  execute: async (input) => {
+    try {
+      return await research(input.query, input.depth);
+    } catch (err) {
+      // Graceful: surface the error (e.g. out of Linkup credits) to the agent.
+      return { error: err instanceof Error ? err.message : String(err), answer: "", sources: [] };
+    }
+  },
+});
+
 export const cacheTools = {
   list_bricks: listBricksTool,
   search_bricks: searchBricksTool,
   search_partials: searchPartialsTool,
   bake_partial: bakePartialTool,
+  research: researchTool,
 };

@@ -10,6 +10,20 @@ import * as React from "react";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 
+// @ag-ui/client stores `this.fetch = config.fetch ?? fetch` and later calls
+// `this.fetch(url, init)` — invoking native fetch as a method throws
+// "Illegal invocation" (fetch must run with this===window). Wrap the global
+// fetch in a window-bound shim (idempotent) so any unbound call works. Runs on
+// the client at bundle load, before any agent run.
+if (typeof window !== "undefined" && typeof window.fetch === "function") {
+  const w = window as Window & { __fetchBound?: boolean };
+  if (!w.__fetchBound) {
+    const native = window.fetch.bind(window);
+    window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => native(input, init)) as typeof fetch;
+    w.__fetchBound = true;
+  }
+}
+
 const COLLAB_WS_URL =
   process.env.NEXT_PUBLIC_COLLAB_WS_URL ?? "ws://localhost:1234";
 
