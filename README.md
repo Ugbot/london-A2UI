@@ -1,15 +1,17 @@
-# london-A2UI — harden designs into reusable components
+# london-A2UI — an AI front-end builder (Figma × Wix × Metabase)
 
-> **Hackathon project.** A design tool for **dashboards, widgets, and reports**
-> that works from a chat canvas **and over an API** — and turns every design it
-> produces into a typed, reusable, re-composable component.
+> **Hackathon project.** An agent-driven builder for **data-driven SPAs,
+> dashboards, and reports** — describe it in chat, map it over your APIs/CMS, edit
+> it like Figma, and call it over an API. Built from typed React **bricks**, glued
+> with **mortar** (typed logic on a reactive store), hardened into reusable
+> components.
 
 **The pitch:** most "AI builds a UI" demos spit out throwaway JSX you can't trust,
-reuse, or call from anywhere. london-A2UI does the opposite. You describe what you
-want; an agent **composes it out of pre-built, typed React bricks** (never raw
-markup), validates it against a schema, renders it on a live canvas — and
-**distills the result into a reusable template** that's searchable, callable over
-HTTP, and gets better the more you use it. Designs harden into components.
+reuse, or wire to data. london-A2UI does the opposite. You describe what you want;
+an agent **composes it from pre-built, typed React bricks** (never raw markup),
+validates it, renders it on a live canvas, **binds it to live data sources**
+(Wix/Metabase-style), lets you **edit transactionally with undo/redo** (Figma-
+style), and **distills each design into a reusable, HTTP-callable template**.
 
 ---
 
@@ -24,6 +26,32 @@ HTTP, and gets better the more you use it. Designs harden into components.
 3. **The cache** — every successful design is distilled into a **template with
    typed holes** and embedded into pgvector, so the next request *reuses* it
    instead of regenerating. Your designs become a growing component library.
+
+## Map it over data (Wix / Metabase)
+
+A **data layer** turns a static design into a live app:
+- **Connections** — register an API/CMS (manual or **import an OpenAPI spec**) in
+  the **Data panel**; secrets are stored server-side and **never** reach the
+  browser. All outbound calls go through a **server proxy** with auth injection +
+  an **SSRF guard** (blocks loopback/private/metadata + DNS-rebind).
+- **Datasets** — the `ApiData` brick fetches into a keyed store value; bind charts
+  / StatCards / tables to it (Metabase-style dashboards). Inputs become **filters**
+  that re-query.
+- **Collections** — a `Repeater` renders one templated card/row per record; child
+  bricks read fields via `bindField` (Gatsby/Wix repeater, CMS-style).
+- **Forms** — collect bound inputs and POST to a connection endpoint (write-back).
+- **Mortar** — small typed TS modules (`export default (input, ctx) => …`) that
+  reshape responses (`transform`) or derive values (`bindCompute`) on a reactive
+  store, sandboxed (no network — that's Connections). `registerDerived` propagates
+  computed values to bound bricks in real time.
+
+## Edit it like Figma
+
+- **Transactional undo/redo** (⌘/Ctrl+Z) over the canvas via the Yjs doc — collab-
+  aware, persisted.
+- **Drag-to-rearrange** elements, **click-to-target** + `@`-mention any element,
+  conversational edits (swap type, recolour, make-live, add/remove/duplicate/move),
+  and optional **live multiplayer** (cursors, presence, shared editing).
 
 ## The API
 
