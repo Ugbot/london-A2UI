@@ -14,6 +14,7 @@
  */
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
+import { withToolCallRepair } from "./tool-repair";
 import {
   AVAILABLE_MODELS,
   parseModelId,
@@ -83,7 +84,9 @@ export function resolveModel(sel: ModelSelection = {}) {
       : DEFAULT_PROVIDER;
   const id =
     sel.model ?? (provider === DEFAULT_PROVIDER ? MODEL : PROVIDER_DEFAULT_MODEL[provider]);
-  return provider === "anthropic" ? anthropic(id) : openai(id);
+  // Guard every model so a malformed tool call is repaired/dropped instead of
+  // wedging the run (see tool-repair.ts).
+  return withToolCallRepair(provider === "anthropic" ? anthropic(id) : openai(id));
 }
 
 /** Back-compat: `provider(id)` / `model(id)` resolve against the default provider. */
