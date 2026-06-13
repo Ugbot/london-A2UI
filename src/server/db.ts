@@ -103,11 +103,22 @@ export function migrate(): Promise<void> {
         )
       `);
 
-      // Per-thread canvas snapshots so a previous chat restores its widget.
+      // Per-session canvas snapshots so reopening a session restores its widget.
       await client.query(`
         CREATE TABLE IF NOT EXISTS canvases (
           thread_id  text PRIMARY KEY,
           widget     jsonb NOT NULL,
+          updated_at timestamptz NOT NULL DEFAULT now()
+        )
+      `);
+
+      // Per-session chat transcripts (the AG-UI message array) so the
+      // conversation restores alongside the canvas — independent of the chat
+      // runtime's own (in-memory) thread store.
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS chats (
+          session_id text PRIMARY KEY,
+          messages   jsonb NOT NULL,
           updated_at timestamptz NOT NULL DEFAULT now()
         )
       `);

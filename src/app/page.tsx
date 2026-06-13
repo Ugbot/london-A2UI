@@ -19,6 +19,7 @@ import { WidgetCanvas } from "@/components/WidgetCanvas";
 import { MentionOverlay } from "@/components/MentionOverlay";
 import { ExportMenu } from "@/components/ExportMenu";
 import { ModelMenu } from "@/components/ModelMenu";
+import { ChatPersistence } from "@/components/ChatPersistence";
 import { DEFAULT_MODEL_ID } from "@/mastra/models";
 import { WidgetPreviewCard, AskUserCard, FoundryCard } from "@/components/chat-cards";
 import { useMentionStore } from "@/state/mentionStore";
@@ -379,6 +380,7 @@ export default function WidgetComposerPage() {
       </ThreadsPanelGate>
       <div className={styles.mainPanel}>
         <CopilotChatConfigurationProvider agentId="default" threadId={threadId}>
+          <ChatPersistence session={session} />
           <main
             style={
               { "--copilot-kit-primary-color": themeColor } as CSSProperties

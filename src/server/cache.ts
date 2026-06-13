@@ -201,5 +201,29 @@ export async function loadCanvas(threadId: string): Promise<unknown | null> {
   return rows[0]?.widget ?? null;
 }
 
+/** Persist a session's chat transcript (AG-UI message array). */
+export async function saveChat(sessionId: string, messages: unknown): Promise<void> {
+  await migrate();
+  const pool = await getPool();
+  await pool.query(
+    `INSERT INTO chats (session_id, messages, updated_at)
+     VALUES ($1, $2::jsonb, now())
+     ON CONFLICT (session_id) DO UPDATE
+       SET messages = EXCLUDED.messages, updated_at = now()`,
+    [sessionId, JSON.stringify(messages)],
+  );
+}
+
+/** Load a session's saved chat transcript, or null if none. */
+export async function loadChat(sessionId: string): Promise<unknown | null> {
+  await migrate();
+  const pool = await getPool();
+  const { rows } = await pool.query(
+    `SELECT messages FROM chats WHERE session_id = $1`,
+    [sessionId],
+  );
+  return rows[0]?.messages ?? null;
+}
+
 /** Re-export for tools that surface the brick catalog. */
 export { brickCatalog };
