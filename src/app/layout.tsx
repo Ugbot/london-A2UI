@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { CopilotKit } from "@copilotkit/react-core/v2";
 import { CollabProvider } from "@/collab/provider";
 import { StyleLayersProvider } from "@/style/StyleLayers";
+import { QueryProvider } from "@/state/QueryProvider";
 import "./globals.css";
 import "@copilotkit/react-core/v2/styles.css";
 
@@ -25,7 +26,9 @@ export default function RootLayout({
           useSingleEndpoint={false}
         >
           <CollabProvider>
-            <StyleLayersProvider>{children}</StyleLayersProvider>
+            <StyleLayersProvider>
+              <QueryProvider>{children}</QueryProvider>
+            </StyleLayersProvider>
           </CollabProvider>
         </CopilotKit>
       </body>

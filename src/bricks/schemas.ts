@@ -13,6 +13,12 @@ export const chartDatum = z.object({
   value: z.number(),
 });
 
+/** Live-bind a brick's primary data to a keyed element id (updated via stream actions). */
+const bindKey = z
+  .string()
+  .optional()
+  .describe("Live-bind this brick's data to a keyed element id, updated via stream actions");
+
 // --- Layout ---
 export const stackSchema = z.object({
   direction: z.enum(["vertical", "horizontal"]).default("vertical"),
@@ -50,6 +56,7 @@ export const headingSchema = z.object({
 export const textSchema = z.object({
   text: z.string(),
   muted: z.boolean().default(false),
+  bindKey,
 });
 
 export const badgeSchema = z.object({
@@ -62,6 +69,7 @@ export const statCardSchema = z.object({
   value: z.string(),
   delta: z.string().optional(),
   trend: z.enum(["up", "down", "flat"]).default("flat"),
+  bindKey,
 });
 
 export const listSchema = z.object({
@@ -72,6 +80,7 @@ export const listSchema = z.object({
 export const tableSchema = z.object({
   columns: z.array(z.string()),
   rows: z.array(z.array(z.string())),
+  bindKey,
 });
 
 export const avatarSchema = z.object({
@@ -95,15 +104,18 @@ export const tabsSchema = z.object({
 export const barChartSchema = z.object({
   data: z.array(chartDatum).min(1),
   color: z.string().default("#6366f1"),
+  bindKey,
 });
 
 export const lineChartSchema = z.object({
   data: z.array(chartDatum).min(1),
   color: z.string().default("#6366f1"),
+  bindKey,
 });
 
 export const pieChartSchema = z.object({
   data: z.array(chartDatum).min(1),
+  bindKey,
 });
 
 // --- Form ---
@@ -151,6 +163,32 @@ export const alertSchema = z.object({
 export const progressBarSchema = z.object({
   value: z.number().min(0).max(100),
   label: z.string().optional(),
+  bindKey,
+});
+
+// --- Stateful / SPA ---
+export const dataSourceSchema = z.object({
+  url: z.string().describe("HTTP(S) endpoint returning JSON"),
+  targetKey: z.string().describe("Store key to write the fetched value into"),
+  jsonPath: z
+    .string()
+    .optional()
+    .describe("Dot path into the JSON response, e.g. data.amount (default: whole body)"),
+  intervalMs: z.number().int().min(1000).max(600000).default(5000),
+  label: z.string().optional(),
+});
+
+export const screensSchema = z.object({
+  labels: z.array(z.string()).min(1).describe("Screen names; one child per label, in order"),
+});
+
+export const actionButtonSchema = z.object({
+  label: z.string(),
+  target: z.string().describe("Keyed element id to update on click"),
+  value: z.unknown().describe("Value to set on the target when clicked"),
+  variant: z
+    .enum(["default", "secondary", "outline", "ghost", "destructive"])
+    .default("default"),
 });
 
 // --- Rich / embeds ---
@@ -277,3 +315,6 @@ export type CollabTextProps = z.infer<typeof collabTextSchema>;
 export type CollabChatProps = z.infer<typeof collabChatSchema>;
 export type LiveFeedProps = z.infer<typeof liveFeedSchema>;
 export type CryptoChartProps = z.infer<typeof cryptoChartSchema>;
+export type DataSourceProps = z.infer<typeof dataSourceSchema>;
+export type ScreensProps = z.infer<typeof screensSchema>;
+export type ActionButtonProps = z.infer<typeof actionButtonSchema>;

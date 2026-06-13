@@ -19,6 +19,7 @@ import { WidgetPreviewCard, AskUserCard } from "@/components/chat-cards";
 import { registry } from "@/bricks/registry";
 import { validateComposition, renderWidgetInputSchema } from "@/bricks/composition";
 import type { RenderStatus } from "@/lib/types";
+import { streamToElement } from "@/state/store";
 import { useSharedWidget } from "@/collab/hooks";
 import { CollabControls } from "@/collab/CollabControls";
 import { useCollab } from "@/collab/provider";
@@ -71,6 +72,23 @@ export default function WidgetComposerPage() {
     },
     // Show the assembled widget as a live preview in chat — not raw JSON.
     render: ({ args }) => <WidgetPreviewCard tree={args?.tree} />,
+  });
+
+  // Hotwire/Turbo-Stream-style messaging: push a live update to any keyed
+  // element (bricks with a matching bindKey re-render instantly).
+  useFrontendTool({
+    name: "stream_to_element",
+    description:
+      "Send a live update to a keyed element on the canvas (a brick with a matching bindKey). action: set (replace), merge (object), append (array push), remove. Use to update data live without rebuilding the widget.",
+    parameters: z.object({
+      action: z.enum(["set", "merge", "append", "remove"]).default("set"),
+      target: z.string().describe("The keyed element id (matches a brick's bindKey)"),
+      value: z.unknown().optional().describe("The value to apply"),
+    }),
+    handler: async ({ action, target, value }) => {
+      streamToElement({ action, target, value });
+      return `Streamed ${action} to "${target}".`;
+    },
   });
 
   // Collaboration is opt-in: the agent turns it on only when the user asks

@@ -241,6 +241,30 @@ export const BRICKS: BrickDef[] = [
     Component: C.Animated,
   }),
 
+  // --- Stateful / SPA ---
+  defineBrick({
+    name: "DataSource",
+    description: "Polls a JSON HTTP endpoint on an interval and writes the result into a keyed store element, so bound bricks (charts/stats/tables with a matching bindKey) update live. Use to feed live data into a widget.",
+    tags: ["data", "live", "fetch", "api", "polling", "state", "stream", "source"],
+    schema: S.dataSourceSchema,
+    Component: C.DataSource,
+  }),
+  defineBrick({
+    name: "Screens",
+    description: "A multi-screen SPA wrapper: a nav bar switches between full child compositions (one child per label, in order). Use to build multi-page apps with shared state.",
+    tags: ["spa", "navigation", "screens", "router", "pages", "tabs", "app", "container"],
+    schema: S.screensSchema,
+    acceptsChildren: true,
+    Component: C.Screens,
+  }),
+  defineBrick({
+    name: "ActionButton",
+    description: "A button that, when clicked, sets a value on a keyed store element — driving live updates to bound bricks. Use for interactivity (filters, toggles, navigation, refresh).",
+    tags: ["action", "button", "interactive", "state", "trigger", "event", "message"],
+    schema: S.actionButtonSchema,
+    Component: C.ActionButton,
+  }),
+
   // --- Collaborative / live ---
   defineBrick({
     name: "CollabText",

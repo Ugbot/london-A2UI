@@ -22,7 +22,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { useElementData } from "@/state/hooks";
+import { useWidgetStore } from "@/state/store";
 import {
   Card as UICard,
   CardContent,
@@ -33,6 +36,7 @@ import {
 } from "@/components/ui/card";
 import { Button as UIButton } from "@/components/ui/button";
 import type {
+  ActionButtonProps,
   AlertProps,
   AnimatedProps,
   AvatarProps,
@@ -42,6 +46,7 @@ import type {
   CardProps,
   CheckboxProps,
   CryptoChartProps,
+  DataSourceProps,
   DividerProps,
   FormFieldProps,
   GridProps,
@@ -54,6 +59,7 @@ import type {
   PieChartProps,
   ProgressBarProps,
   QuoteProps,
+  ScreensProps,
   SectionProps,
   SelectProps,
   StackProps,
@@ -147,8 +153,10 @@ export function Heading({ text, level }: HeadingProps) {
   return <Tag className={cn("font-semibold tracking-tight", size)}>{text}</Tag>;
 }
 
-export function Text({ text, muted }: TextProps) {
-  return <p className={cn("text-sm leading-relaxed", muted && "text-[var(--muted-foreground)]")}>{text}</p>;
+export function Text({ text, muted, bindKey }: TextProps) {
+  const live = useElementData<string | undefined>(bindKey, undefined);
+  const shown = live ?? text;
+  return <p className={cn("text-sm leading-relaxed", muted && "text-[var(--muted-foreground)]")}>{shown}</p>;
 }
 
 export function Badge({ text, variant }: BadgeProps) {
@@ -165,14 +173,16 @@ export function Badge({ text, variant }: BadgeProps) {
   );
 }
 
-export function StatCard({ label, value, delta, trend }: StatCardProps) {
+export function StatCard({ label, value, delta, trend, bindKey }: StatCardProps) {
+  const live = useElementData<string | number | undefined>(bindKey, undefined);
+  const shownValue = live !== undefined ? String(live) : value;
   const trendColor = { up: "text-emerald-600", down: "text-red-600", flat: "text-[var(--muted-foreground)]" }[trend];
   const arrow = { up: "▲", down: "▼", flat: "→" }[trend];
   return (
     <UICard>
       <CardContent className="flex flex-col gap-1 p-5">
         <span className="text-sm text-[var(--muted-foreground)]">{label}</span>
-        <span className="text-2xl font-semibold tracking-tight">{value}</span>
+        <span className="text-2xl font-semibold tracking-tight tabular-nums">{shownValue}</span>
         {delta && <span className={cn("text-xs font-medium", trendColor)}>{arrow} {delta}</span>}
       </CardContent>
     </UICard>
@@ -190,10 +200,13 @@ export function List({ items, ordered }: ListProps) {
   );
 }
 
-export function Table({ columns, rows }: TableProps) {
+export function Table({ columns, rows, bindKey }: TableProps) {
+  const liveRows = useElementData<string[][] | undefined>(bindKey, undefined);
+  const effectiveRows = liveRows ?? rows;
   const [sort, setSort] = React.useState<{ col: number; dir: 1 | -1 } | null>(null);
 
   const sorted = React.useMemo(() => {
+    const rows = effectiveRows;
     if (!sort) return rows;
     const { col, dir } = sort;
     // Numeric-aware comparison (handles "$1,200", "12%", plain text).
@@ -209,7 +222,7 @@ export function Table({ columns, rows }: TableProps) {
       const cmp = an !== null && bn !== null ? an - bn : String(av).localeCompare(String(bv));
       return cmp * dir;
     });
-  }, [rows, sort]);
+  }, [effectiveRows, sort]);
 
   const toggle = (col: number) =>
     setSort((prev) =>
@@ -309,10 +322,12 @@ function ChartFrame({ children }: { children: React.ReactElement }) {
   );
 }
 
-export function BarChart({ data, color }: BarChartProps) {
+export function BarChart({ data, color, bindKey }: BarChartProps) {
+  const live = useElementData<typeof data | undefined>(bindKey, undefined);
+  const chartData = live ?? data;
   return (
     <ChartFrame>
-      <RBarChart data={data}>
+      <RBarChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
         <XAxis dataKey="label" fontSize={12} stroke="var(--muted-foreground)" />
         <YAxis fontSize={12} stroke="var(--muted-foreground)" />
@@ -323,10 +338,12 @@ export function BarChart({ data, color }: BarChartProps) {
   );
 }
 
-export function LineChart({ data, color }: LineChartProps) {
+export function LineChart({ data, color, bindKey }: LineChartProps) {
+  const live = useElementData<typeof data | undefined>(bindKey, undefined);
+  const chartData = live ?? data;
   return (
     <ChartFrame>
-      <RLineChart data={data}>
+      <RLineChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
         <XAxis dataKey="label" fontSize={12} stroke="var(--muted-foreground)" />
         <YAxis fontSize={12} stroke="var(--muted-foreground)" />
@@ -337,12 +354,14 @@ export function LineChart({ data, color }: LineChartProps) {
   );
 }
 
-export function PieChart({ data }: PieChartProps) {
+export function PieChart({ data, bindKey }: PieChartProps) {
+  const live = useElementData<typeof data | undefined>(bindKey, undefined);
+  const chartData = live ?? data;
   return (
     <ChartFrame>
       <RPieChart>
-        <Pie data={data} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius={90} label>
-          {data.map((_, i) => (
+        <Pie data={chartData} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius={90} label>
+          {chartData.map((_, i) => (
             <Cell key={i} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
           ))}
         </Pie>
@@ -512,6 +531,79 @@ export function Animated({ animation, duration, loop, children }: WithChildren<A
   );
 }
 
+// --- Stateful / SPA ---
+function getJsonPath(obj: unknown, path?: string): unknown {
+  if (!path) return obj;
+  return path.split(".").reduce<unknown>((acc, k) => {
+    if (acc && typeof acc === "object") return (acc as Record<string, unknown>)[k];
+    return undefined;
+  }, obj);
+}
+
+export function DataSource({ url, targetKey, jsonPath, intervalMs, label }: DataSourceProps) {
+  const { data, error, isFetching } = useQuery({
+    queryKey: ["datasource", url, jsonPath],
+    queryFn: async () => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return getJsonPath(await res.json(), jsonPath);
+    },
+    refetchInterval: intervalMs,
+  });
+
+  // Push fetched values into the keyed store so bound bricks update live.
+  React.useEffect(() => {
+    if (data !== undefined) useWidgetStore.getState().set(targetKey, data);
+  }, [data, targetKey]);
+
+  return (
+    <div className="flex items-center gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
+      <span
+        className={cn(
+          "inline-block h-1.5 w-1.5 rounded-full",
+          error ? "bg-red-500" : isFetching ? "bg-amber-500" : "bg-emerald-500",
+        )}
+      />
+      {label ?? `Live data → ${targetKey}`}
+      {error ? " (error)" : ""}
+    </div>
+  );
+}
+
+export function Screens({ labels, children }: WithChildren<ScreensProps>) {
+  const [active, setActive] = React.useState(0);
+  const items = React.Children.toArray(children);
+  return (
+    <div className="flex flex-col gap-3">
+      <nav className="flex gap-1 border-b border-[var(--border)]">
+        {labels.map((label, i) => (
+          <button
+            key={i}
+            onClick={() => setActive(i)}
+            className={cn(
+              "-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition-colors",
+              i === active
+                ? "border-[var(--primary)] text-[var(--foreground)]"
+                : "border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+      <div>{items[active] ?? items[0] ?? null}</div>
+    </div>
+  );
+}
+
+export function ActionButton({ label, target, value, variant }: ActionButtonProps) {
+  return (
+    <UIButton variant={variant} onClick={() => useWidgetStore.getState().set(target, value)}>
+      {label}
+    </UIButton>
+  );
+}
+
 // --- Form ---
 export function Input({ label, placeholder, type }: InputProps) {
   return (
@@ -600,17 +692,19 @@ export function Alert({ title, description, variant }: AlertProps) {
   );
 }
 
-export function ProgressBar({ value, label }: ProgressBarProps) {
+export function ProgressBar({ value, label, bindKey }: ProgressBarProps) {
+  const live = useElementData<number | undefined>(bindKey, undefined);
+  const pct = Math.max(0, Math.min(100, live ?? value));
   return (
     <div className="flex flex-col gap-1">
       {label && (
         <div className="flex justify-between text-xs text-[var(--muted-foreground)]">
           <span>{label}</span>
-          <span>{value}%</span>
+          <span>{Math.round(pct)}%</span>
         </div>
       )}
       <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--secondary)]">
-        <div className="h-full rounded-full bg-[var(--primary)] transition-all" style={{ width: `${value}%` }} />
+        <div className="h-full rounded-full bg-[var(--primary)] transition-all" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
