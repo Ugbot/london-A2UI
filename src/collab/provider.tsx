@@ -38,8 +38,12 @@ interface CollabContextValue {
   provider: WebsocketProvider | null;
   connected: boolean;
   user: CollabUser | null;
-  /** The session id (room) — null until collaboration is enabled. */
+  /** The active session id — also the canvas/chat/report key and (when collab is
+   *  on) the room. Resolved on mount; switched via setSession. */
   session: string | null;
+  /** Switch the active session (selecting a thread/report or starting a new one).
+   *  Updates the URL + localStorage, and the collab room if collaboration is on. */
+  setSession: (id: string) => void;
   /** Whether collaboration (sync/presence/cursors) is turned on. Off by default. */
   enabled: boolean;
   /** Turn collaboration on (connects, resolves identity + shareable session). */
@@ -88,15 +92,21 @@ function resolveSession(): string {
         : Math.random().toString(36).slice(2, 10);
   }
 
-  // Reflect the resolved session in the URL (shareable) and remember it.
-  params.set("session", session);
+  persistSession(session);
+  return session;
+}
+
+/** Reflect the active session in the URL (shareable) and remember it (localStorage). */
+function persistSession(id: string): void {
+  if (typeof window === "undefined") return;
+  const params = new URLSearchParams(window.location.search);
+  params.set("session", id);
   window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
   try {
-    localStorage.setItem(SESSION_STORAGE_KEY, session);
+    localStorage.setItem(SESSION_STORAGE_KEY, id);
   } catch {
     /* ignore */
   }
-  return session;
 }
 
 export function CollabProvider({ children }: { children: React.ReactNode }) {
@@ -113,10 +123,15 @@ export function CollabProvider({ children }: { children: React.ReactNode }) {
   const enable = React.useCallback(() => setEnabled(true), []);
   const disable = React.useCallback(() => setEnabled(false), []);
 
-  // Resolve the session id once on mount (client only), independent of whether
-  // collaboration is enabled. The session is the STABLE key for the canvas doc
-  // and its DB persistence, so it must not change when collab toggles or when
-  // chat threads switch.
+  // Switch the active session (selecting/creating a thread or report). This is
+  // the SINGLE id behind the canvas, chat, report, and (when on) the collab room.
+  const setSessionPublic = React.useCallback((id: string) => {
+    if (!id) return;
+    persistSession(id);
+    setSession(id);
+  }, []);
+
+  // Resolve the session id once on mount (client only).
   React.useEffect(() => {
     // Resolve in the effect body (post-commit) — NOT inside the setState updater,
     // which React may run during render; resolveSession calls history.replaceState
@@ -125,15 +140,14 @@ export function CollabProvider({ children }: { children: React.ReactNode }) {
     setSession((s) => s ?? resolved);
   }, []);
 
-  // Connect ONLY when collaboration is enabled. Cleanup on disable/unmount.
+  // Connect when collaboration is enabled; reconnect when the session changes so
+  // the room always follows the active thread/report.
   React.useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !session) return;
     const u = randomUser();
-    const sess = resolveSession();
     setUser(u);
-    setSession(sess);
 
-    const wsProvider = new WebsocketProvider(COLLAB_WS_URL, `room-${sess}`, doc, {
+    const wsProvider = new WebsocketProvider(COLLAB_WS_URL, `room-${session}`, doc, {
       connect: true,
     });
     wsProvider.awareness.setLocalStateField("user", u);
@@ -147,13 +161,12 @@ export function CollabProvider({ children }: { children: React.ReactNode }) {
       setProvider(null);
       setConnected(false);
       setUser(null);
-      // Keep `session` — it is the stable canvas/DB key, not collab-scoped.
     };
-  }, [enabled, doc]);
+  }, [enabled, doc, session]);
 
   const value = React.useMemo<CollabContextValue>(
-    () => ({ doc, provider, connected, user, session, enabled, enable, disable }),
-    [doc, provider, connected, user, session, enabled, enable, disable],
+    () => ({ doc, provider, connected, user, session, setSession: setSessionPublic, enabled, enable, disable }),
+    [doc, provider, connected, user, session, setSessionPublic, enabled, enable, disable],
   );
 
   return <CollabContext.Provider value={value}>{children}</CollabContext.Provider>;

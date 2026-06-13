@@ -13,7 +13,14 @@ interface CanvasSummary {
   updatedAt: string;
 }
 
-export function ReportsMenu({ currentSession }: { currentSession: string | null }) {
+export function ReportsMenu({
+  currentSession,
+  onOpen,
+}: {
+  currentSession: string | null;
+  /** Switch to a report's session in-place (no reload). */
+  onOpen?: (id: string) => void;
+}) {
   const [open, setOpen] = React.useState(false);
   const [items, setItems] = React.useState<CanvasSummary[] | null>(null);
 
@@ -30,12 +37,12 @@ export function ReportsMenu({ currentSession }: { currentSession: string | null 
   }, [open, load]);
 
   const openReport = (id: string) => {
-    if (id === currentSession) {
-      setOpen(false);
-      return;
-    }
-    // Navigate to the report's session — the page restores its canvas on load.
-    window.location.href = `${window.location.pathname}?session=${encodeURIComponent(id)}`;
+    setOpen(false);
+    if (id === currentSession) return;
+    // Switch the session in-place (canvas + chat follow); fall back to a full
+    // navigation if no handler is wired.
+    if (onOpen) onOpen(id);
+    else window.location.href = `${window.location.pathname}?session=${encodeURIComponent(id)}`;
   };
 
   const fmt = (iso: string) => {

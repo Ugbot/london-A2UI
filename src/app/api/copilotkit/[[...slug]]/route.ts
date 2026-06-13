@@ -69,17 +69,28 @@ export async function POST(req: Request) {
     const { pathname } = new URL(req.url);
     if (/\/agent\/[^/]+\/(run|connect)$/.test(pathname)) {
       const body = (await req.clone().json().catch(() => null)) as
-        | { messages?: unknown }
+        | { messages?: unknown; context?: unknown }
         | null;
-      if (body && Array.isArray(body.messages)) {
-        const clean = sanitizeMessages(body.messages);
-        if (JSON.stringify(clean) !== JSON.stringify(body.messages)) {
+      if (body) {
+        const patch: Record<string, unknown> = {};
+        // (1) Sanitize message history so a malformed tool call from a prior turn
+        //     (e.g. args `{}{}`) can't crash the run on replay.
+        if (Array.isArray(body.messages)) {
+          const clean = sanitizeMessages(body.messages);
+          if (JSON.stringify(clean) !== JSON.stringify(body.messages)) patch.messages = clean;
+        }
+        // (2) The runtime requires `context` (array). If a transient client state
+        //     omits it, the run hard-400s ("context Required") and nothing can
+        //     start. Default it so a run can never be blocked by a missing context.
+        if (!Array.isArray(body.context)) patch.context = [];
+
+        if (Object.keys(patch).length > 0) {
           const headers = new Headers(req.headers);
           headers.delete("content-length"); // body length changed; let it recompute
           const patched = new Request(req.url, {
             method: "POST",
             headers,
-            body: JSON.stringify({ ...body, messages: clean }),
+            body: JSON.stringify({ ...body, ...patch }),
           });
           return honoPost(patched);
         }

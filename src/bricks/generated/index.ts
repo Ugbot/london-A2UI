@@ -3,5 +3,7 @@
  */
 import type { BrickDef } from "@/bricks/types";
 import { brick as b0 } from "./qrcode";
+import { brick as b1 } from "./spinning-cube";
+import { brick as b2 } from "./spinning-cube-lit";
 
-export const GENERATED_BRICKS: BrickDef[] = [b0];
+export const GENERATED_BRICKS: BrickDef[] = [b0, b1, b2];

@@ -123,6 +123,22 @@ export function migrate(): Promise<void> {
         )
       `);
 
+      // Data-layer connections: external data sources (REST/OpenAPI CMS/APIs)
+      // the SPA maps over. `auth` holds secrets and is NEVER serialized to the
+      // client — only the redacted shape crosses that boundary (connections.ts).
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS connections (
+          id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          name            text NOT NULL,
+          base_url        text NOT NULL,
+          auth            jsonb NOT NULL DEFAULT '{"type":"none"}'::jsonb,
+          default_headers jsonb NOT NULL DEFAULT '{}'::jsonb,
+          endpoints       jsonb NOT NULL DEFAULT '[]'::jsonb,
+          created_at      timestamptz NOT NULL DEFAULT now(),
+          updated_at      timestamptz NOT NULL DEFAULT now()
+        )
+      `);
+
       // Foundry-generated bricks (agent-authored components, possibly backed by
       // a newly-installed npm lib). The source is recorded so they can be
       // rebuilt; an embedding row is also written to `bricks` for search.

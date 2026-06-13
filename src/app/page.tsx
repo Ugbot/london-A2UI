@@ -50,13 +50,13 @@ import { STYLE_PRESETS, useStyleLayers } from "@/style/StyleLayers";
 
 export default function WidgetComposerPage() {
   const [themeColor, setThemeColor] = useState("#6366f1");
-  const [threadId, setThreadId] = useState<string | undefined>(undefined);
   const [modelId, setModelId] = useState<string>(DEFAULT_MODEL_ID);
-  const { enabled: collabEnabled, enable: enableCollab, disable: disableCollab, session } = useCollab();
-  // Canvas widget: ONE document per session, on a stable key. The same doc is
-  // used solo and collaborative (turning collab on just syncs it), and it is
-  // NOT tied to the chat thread — switching threads / sending messages no longer
-  // blanks the canvas or makes edits target an empty tree.
+  const { enabled: collabEnabled, enable: enableCollab, disable: disableCollab, session, setSession } = useCollab();
+  // ONE identity behind everything: the session id IS the chat thread id, the
+  // canvas key, the report id, and the collab room. Selecting/creating a thread
+  // or opening a report just switches the session — so the canvas, the chat, and
+  // the reports list always match. (No separate threadId state.)
+  const threadId = session ?? undefined;
   const [widget, setWidget] = useSharedWidget();
   const [status, setStatus] = useState<RenderStatus | null>(null);
   const { toggleLayer, clearLayers } = useStyleLayers();
@@ -111,27 +111,19 @@ export default function WidgetComposerPage() {
     return "Rendered successfully.";
   };
 
-  // Make the chat thread EXPLICIT and stable. Left undefined, CopilotKit
-  // silently mints a fresh throwaway thread per run — messages scatter across
-  // detached threads, edits miss the canvas context, and runs collide ("thread
-  // locked"). Default the thread to the session so chat, canvas, agent context,
-  // and the threads drawer all share ONE known thread. The user can still pick
-  // another thread in the drawer (onThreadChange).
-  useEffect(() => {
-    if (session && !threadId) setThreadId(`thread-${session}`);
-  }, [session, threadId]);
-
-  // Restore the session's canvas from the DB on load (once the session id is
-  // known). Keyed by session, not thread — switching chat threads no longer
-  // reloads/blanks the canvas. Skip while collaborating: the shared doc is the
-  // source of truth and a DB snapshot must not clobber peers' edits.
+  // Restore the active session's canvas from the DB whenever the session changes
+  // (load, thread switch, report open). The session IS the thread id, so this
+  // keeps canvas ↔ thread ↔ report in lock-step. We set the loaded value even
+  // when it's empty (→ null) so switching to a NEW/empty thread shows a blank
+  // canvas instead of leaking the previous one. Skip while collaborating: the
+  // shared doc is the source of truth and a DB snapshot must not clobber peers.
   useEffect(() => {
     if (collabEnabled || !session) return;
     let cancelled = false;
     fetch(`/api/canvas?threadId=${encodeURIComponent(session)}`)
       .then((r) => r.json())
       .then((d) => {
-        if (!cancelled && d?.widget) setWidgetRef.current(d.widget);
+        if (!cancelled) setWidgetRef.current((d?.widget as CompositionNode) ?? null);
       })
       .catch(() => {});
     return () => {
@@ -376,7 +368,7 @@ export default function WidgetComposerPage() {
         <ThreadsDrawer
           agentId="default"
           threadId={threadId}
-          onThreadChange={setThreadId}
+          onThreadChange={(id) => setSession(id ?? crypto.randomUUID())}
         />
       </ThreadsPanelGate>
       <div className={styles.mainPanel}>
@@ -406,7 +398,7 @@ export default function WidgetComposerPage() {
                   >
                     Auto bricks {autoBricks ? "on" : "off"}
                   </button>
-                  <ReportsMenu currentSession={session} />
+                  <ReportsMenu currentSession={session} onOpen={setSession} />
                   <ModelMenu value={modelId} onChange={setModelId} />
                   <ExportMenu widget={widget} onImport={(t) => applyTree(t)} />
                   <StyleMenu />
