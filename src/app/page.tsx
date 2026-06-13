@@ -20,6 +20,7 @@ import { MentionOverlay } from "@/components/MentionOverlay";
 import { ExportMenu } from "@/components/ExportMenu";
 import { ModelMenu } from "@/components/ModelMenu";
 import { ReportsMenu } from "@/components/ReportsMenu";
+import { DataPanel } from "@/components/DataPanel";
 import { ChatPersistence } from "@/components/ChatPersistence";
 import { DEFAULT_MODEL_ID } from "@/mastra/models";
 import { WidgetPreviewCard, AskUserCard, FoundryCard } from "@/components/chat-cards";
@@ -455,6 +456,7 @@ export default function WidgetComposerPage() {
                     </button>
                   </div>
                   <ReportsMenu currentSession={session} onOpen={setSession} />
+                  <DataPanel />
                   <ModelMenu value={modelId} onChange={setModelId} />
                   <ExportMenu widget={widget} onImport={(t) => applyTree(t)} />
                   <StyleMenu />
