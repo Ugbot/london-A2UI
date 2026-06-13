@@ -4,17 +4,20 @@ import {
   InMemoryAgentRunner,
   createCopilotEndpoint,
 } from "@copilotkit/runtime/v2";
-import { HttpAgent } from "@ag-ui/client";
+import { MastraAgent } from "@ag-ui/mastra";
 import { handle } from "hono/vercel";
+import { widgetAgent } from "@/mastra/agent";
 
-// 1. Create the CopilotRuntime instance and utilize the PydanticAI AG-UI
-//    integration to setup the connection.
-const runtime = new CopilotRuntime({
+// Run the agent in-process: MastraAgent is an AG-UI AbstractAgent — exactly the
+// shape the runtime expects (the same interface the old HttpAgent implemented),
+// so no separate agent server/port is needed. The Mastra agent + pgvector + pg
+// need the Node.js runtime.
+export const runtime = "nodejs";
+
+// 1. Create the CopilotRuntime instance with our in-process Mastra agent.
+const copilotRuntime = new CopilotRuntime({
   agents: {
-    // Our FastAPI endpoint URL
-    default: new HttpAgent({
-      url: process.env.AGENT_URL || "http://localhost:8000/",
-    }),
+    default: new MastraAgent({ agent: widgetAgent }),
   },
   // --- copilotkit:intelligence (remove this block to opt out) ---
   ...(process.env.COPILOTKIT_LICENSE_TOKEN
@@ -36,7 +39,7 @@ const runtime = new CopilotRuntime({
 
 // 2. Build a Next.js API route that handles the CopilotKit runtime requests.
 const app = createCopilotEndpoint({
-  runtime,
+  runtime: copilotRuntime,
   basePath: "/api/copilotkit",
 });
 

@@ -18,7 +18,10 @@ services:
   # ---------------------------------------------------------------------------
 
   postgres:
-    image: postgres:16-alpine
+    # pgvector/pgvector:pg16 is a superset of postgres:16 — same data dir format, so
+    # the existing postgres-data volume keeps working, and the `vector` extension
+    # becomes installable (used by the widgetcache DB the agent provisions on boot).
+    image: pgvector/pgvector:pg16
     ports:
       - "${POSTGRES_HOST_PORT:-5432}:5432"
     environment:

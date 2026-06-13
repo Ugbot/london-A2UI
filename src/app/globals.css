@@ -30,11 +30,14 @@
   --font-code: "SFMono-Regular", Menlo, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/*
+ * Force the light theme. Bricks render on white surfaces (cards, inputs); a
+ * dark color-scheme flips --foreground to a light value and produces
+ * light-text-on-white. A single light palette guarantees readable contrast.
+ * (Hard rule: never light text on a white background.)
+ */
+:root {
+  color-scheme: light;
 }
 
 .threadsLayout,
@@ -52,4 +55,35 @@ body {
 body,
 html {
   height: 100%;
+}
+
+/*
+ * Clean style shifts: when style layers change CSS variables, surfaces animate
+ * their colours smoothly instead of snapping. Scoped to the canvas to avoid
+ * transitioning the whole chrome.
+ */
+.widget-surface,
+.widget-surface * {
+  transition:
+    background-color 250ms ease,
+    color 250ms ease,
+    border-color 250ms ease;
+}
+
+/* Live-animation keyframes used by the Animated brick. */
+@keyframes brick-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes brick-slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes brick-slide-down {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes brick-zoom {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
 }

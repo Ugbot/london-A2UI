@@ -1,0 +1,116 @@
+"use client";
+
+/**
+ * Collaboration context: one shared Yjs document per session (room), synced
+ * over the collab WebSocket server. The session id lives in the URL (?session=)
+ * so a session is shareable — anyone opening the URL joins the same doc.
+ * Everything collaborative (widget tree, CollabText, CollabChat) lives here.
+ */
+import * as React from "react";
+import * as Y from "yjs";
+import { WebsocketProvider } from "y-websocket";
+
+const COLLAB_WS_URL =
+  process.env.NEXT_PUBLIC_COLLAB_WS_URL ?? "ws://localhost:1234";
+
+/** Identity broadcast via Yjs awareness for presence. */
+export interface CollabUser {
+  name: string;
+  color: string;
+}
+
+interface CollabContextValue {
+  doc: Y.Doc;
+  provider: WebsocketProvider | null;
+  connected: boolean;
+  user: CollabUser | null;
+  /** The session id (room) — null until collaboration is enabled. */
+  session: string | null;
+  /** Whether collaboration (sync/presence/cursors) is turned on. Off by default. */
+  enabled: boolean;
+  /** Turn collaboration on (connects, resolves identity + shareable session). */
+  enable: () => void;
+  /** Turn collaboration off (disconnects; widget stays local). */
+  disable: () => void;
+}
+
+const CollabContext = React.createContext<CollabContextValue | null>(null);
+
+const COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#a855f7", "#ec4899"];
+const ANIMALS = ["Otter", "Falcon", "Lynx", "Heron", "Fox", "Wren", "Ibex", "Orca"];
+
+/** Client-only: random identity. MUST NOT run during SSR (hydration safety). */
+function randomUser(): CollabUser {
+  const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+  return { name: `${pick(ANIMALS)}-${Math.floor(Math.random() * 900 + 100)}`, color: pick(COLORS) };
+}
+
+/** Resolve the session id from the URL, generating + persisting one if absent. */
+function resolveSession(): string {
+  const params = new URLSearchParams(window.location.search);
+  let session = params.get("session");
+  if (!session) {
+    session =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID().slice(0, 8)
+        : Math.random().toString(36).slice(2, 10);
+    params.set("session", session);
+    window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+  }
+  return session;
+}
+
+export function CollabProvider({ children }: { children: React.ReactNode }) {
+  // Empty doc is deterministic — safe to create during SSR (no randomness).
+  // The doc is always present so the canvas works SOLO; it only SYNCS once
+  // collaboration is enabled (opt-in).
+  const [doc] = React.useState(() => new Y.Doc());
+  const [provider, setProvider] = React.useState<WebsocketProvider | null>(null);
+  const [connected, setConnected] = React.useState(false);
+  const [user, setUser] = React.useState<CollabUser | null>(null);
+  const [session, setSession] = React.useState<string | null>(null);
+  const [enabled, setEnabled] = React.useState(false);
+
+  const enable = React.useCallback(() => setEnabled(true), []);
+  const disable = React.useCallback(() => setEnabled(false), []);
+
+  // Connect ONLY when collaboration is enabled. Cleanup on disable/unmount.
+  React.useEffect(() => {
+    if (!enabled) return;
+    const u = randomUser();
+    const sess = resolveSession();
+    setUser(u);
+    setSession(sess);
+
+    const wsProvider = new WebsocketProvider(COLLAB_WS_URL, `room-${sess}`, doc, {
+      connect: true,
+    });
+    wsProvider.awareness.setLocalStateField("user", u);
+    const onStatus = (e: { status: string }) => setConnected(e.status === "connected");
+    wsProvider.on("status", onStatus);
+    setProvider(wsProvider);
+
+    return () => {
+      wsProvider.off("status", onStatus);
+      wsProvider.destroy();
+      setProvider(null);
+      setConnected(false);
+      setUser(null);
+      setSession(null);
+    };
+  }, [enabled, doc]);
+
+  const value = React.useMemo<CollabContextValue>(
+    () => ({ doc, provider, connected, user, session, enabled, enable, disable }),
+    [doc, provider, connected, user, session, enabled, enable, disable],
+  );
+
+  return <CollabContext.Provider value={value}>{children}</CollabContext.Provider>;
+}
+
+/** Access the shared collaboration context. Throws if used outside the provider. */
+export function useCollab(): CollabContextValue {
+  const ctx = React.useContext(CollabContext);
+  if (!ctx) throw new Error("useCollab must be used within <CollabProvider>");
+  return ctx;
+}
