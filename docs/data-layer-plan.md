@@ -110,6 +110,21 @@ Design (mirrors the foundry, but logic not components; reactive not one-shot):
 
 Sequence mortar AFTER Phase 4 (it plugs into ApiData/Repeater/bindings + the store); ship `registerDerived` + transforms first (highest value for CMS/dataset mapping), then computed bindings, then actions.
 
+### Phase 6.6 — Transactional edits + undo/redo ("Figma with JS")
+The canvas tree lives in a Yjs doc (`doc.getMap("canvas")`), so we get
+transactional, collab-aware history nearly for free with **`Y.UndoManager`**:
+- Wrap each logical edit (`applyTree`, `edit_element`, add/remove/duplicate, drag-
+  reorder) in a single `doc.transact(...)` so it's ONE undo step.
+- Attach a `Y.UndoManager` to the canvas map; expose `undo()/redo()/canUndo/canRedo`
+  from `useSharedWidget`/a `useHistory` hook; wire Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z
+  + header buttons. UndoManager only reverts local origins → safe under collab.
+- **Modularity for cheap VDOM edits:** `NodeRenderer` must key every child by its
+  stable `node.id` (not array index) so React reconciles surgically — moving/
+  editing one brick doesn't remount siblings, and undo/redo diffs cleanly. Keep
+  each brick a small, self-contained component (already the pattern); the data
+  bindings (`bindKey`/`bindField`) read from the store/record context so a value
+  change re-renders only the bound brick, not the tree.
+
 ### Phase 7 — Stretch
 GraphQL connection type (common for headless CMS); data-bound `MasterDetail`; request-time IP pinning for full DNS-rebind safety; dataset result caching/pagination; SQL connection (true Superset parity) behind the proxy.
 

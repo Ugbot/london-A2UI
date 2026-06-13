@@ -19,6 +19,12 @@ const bindKey = z
   .optional()
   .describe("Live-bind this brick's data to a keyed element id, updated via stream actions");
 
+/** Bind a brick's value to a field of the CURRENT record inside a Repeater. */
+const bindField = z
+  .string()
+  .optional()
+  .describe("Dot path into the current record (inside a Repeater) to show as this brick's value, e.g. 'name' or 'address.city'");
+
 // --- Layout ---
 export const stackSchema = z.object({
   direction: z.enum(["vertical", "horizontal"]).default("vertical"),
@@ -51,17 +57,20 @@ export const dividerSchema = z.object({
 export const headingSchema = z.object({
   text: z.string(),
   level: z.number().int().min(1).max(4).default(2),
+  bindField,
 });
 
 export const textSchema = z.object({
   text: z.string(),
   muted: z.boolean().default(false),
   bindKey,
+  bindField,
 });
 
 export const badgeSchema = z.object({
   text: z.string(),
   variant: z.enum(["default", "success", "warning", "danger"]).default("default"),
+  bindField,
 });
 
 export const statCardSchema = z.object({
@@ -70,6 +79,7 @@ export const statCardSchema = z.object({
   delta: z.string().optional(),
   trend: z.enum(["up", "down", "flat"]).default("flat"),
   bindKey,
+  bindField,
 });
 
 export const listSchema = z.object({
@@ -92,6 +102,7 @@ export const imageSchema = z.object({
   src: z.string(),
   alt: z.string().default(""),
   rounded: z.boolean().default(false),
+  bindField,
 });
 
 export const tabsSchema = z.object({
@@ -125,16 +136,19 @@ export const inputSchema = z.object({
   label: z.string().optional(),
   placeholder: z.string().default(""),
   type: z.enum(["text", "email", "password", "number"]).default("text"),
+  bindKey,
 });
 
 export const selectSchema = z.object({
   label: z.string().optional(),
   options: z.array(z.string()).min(1),
+  bindKey,
 });
 
 export const checkboxSchema = z.object({
   label: z.string(),
   checked: z.boolean().default(false),
+  bindKey,
 });
 
 export const formFieldSchema = z.object({
@@ -178,6 +192,40 @@ export const dataSourceSchema = z.object({
     .describe("Dot path into the JSON response, e.g. data.amount (default: whole body)"),
   intervalMs: z.number().int().min(1000).max(600000).default(5000),
   label: z.string().optional(),
+});
+
+// --- Data layer: connections-backed fetch + forms ---
+export const apiDataSchema = z.object({
+  connectionId: z.string().optional().describe("Connection id to fetch through (proxied + authed)"),
+  endpointId: z.string().optional().describe("Endpoint id on the connection"),
+  url: z.string().optional().describe("Direct URL (used instead of a connection)"),
+  method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).default("GET"),
+  mode: z.enum(["proxy", "direct"]).default("proxy").describe("proxy (server, authed, default) or direct (public URLs only)"),
+  query: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
+  headers: z.record(z.string()).optional().describe("Non-secret headers; secrets live on the connection"),
+  body: z.unknown().optional(),
+  targetKey: z.string().describe("Store key to write the fetched value into (a dataset)"),
+  jsonPath: z.string().optional().describe("Dot path into the response, e.g. data.results"),
+  intervalMs: z.number().int().min(0).max(600000).default(0).describe("Poll interval ms; 0 = fetch once"),
+  label: z.string().optional(),
+});
+
+export const repeaterSchema = z.object({
+  bindKey: z.string().describe("Store key holding an ARRAY of records (a dataset). Renders its child template once per record."),
+  empty: z.string().default("No items.").describe("Text shown when the dataset is empty"),
+});
+
+export const formSchema = z.object({
+  connectionId: z.string().optional(),
+  endpointId: z.string().optional(),
+  url: z.string().optional(),
+  method: z.enum(["POST", "PUT", "PATCH", "DELETE"]).default("POST"),
+  mode: z.enum(["proxy", "direct"]).default("proxy"),
+  fieldsPrefix: z.string().describe("Collect store keys under this prefix into the request body, e.g. 'form.signup.'"),
+  submitLabel: z.string().default("Submit"),
+  responseKey: z.string().optional().describe("Store key to write the response into"),
+  successMessage: z.string().default("Submitted."),
+  refetchKeys: z.array(z.string()).optional().describe("Dataset targetKeys to refresh after a successful submit"),
 });
 
 export const screensSchema = z.object({
@@ -318,5 +366,8 @@ export type CollabChatProps = z.infer<typeof collabChatSchema>;
 export type LiveFeedProps = z.infer<typeof liveFeedSchema>;
 export type CryptoChartProps = z.infer<typeof cryptoChartSchema>;
 export type DataSourceProps = z.infer<typeof dataSourceSchema>;
+export type ApiDataProps = z.infer<typeof apiDataSchema>;
+export type RepeaterProps = z.infer<typeof repeaterSchema>;
+export type FormProps = z.infer<typeof formSchema>;
 export type ScreensProps = z.infer<typeof screensSchema>;
 export type ActionButtonProps = z.infer<typeof actionButtonSchema>;

@@ -22,10 +22,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useElementData } from "@/state/hooks";
 import { useWidgetStore } from "@/state/store";
+import { RecordProvider, useRecordField } from "@/state/record";
+import { assembleFormBody } from "./form-util";
 import {
   Card as UICard,
   CardContent,
@@ -39,6 +41,7 @@ import type {
   ActionButtonProps,
   AlertProps,
   AnimatedProps,
+  ApiDataProps,
   AvatarProps,
   BadgeProps,
   BarChartProps,
@@ -47,6 +50,8 @@ import type {
   CheckboxProps,
   CryptoChartProps,
   DataSourceProps,
+  FormProps,
+  RepeaterProps,
   DividerProps,
   FormFieldProps,
   GridProps,
@@ -147,19 +152,38 @@ export function Divider({ label }: DividerProps) {
 }
 
 // --- Display ---
-export function Heading({ text, level }: HeadingProps) {
-  const Tag = (["h1", "h2", "h3", "h4"][level - 1] ?? "h2") as keyof React.JSX.IntrinsicElements;
-  const size = ["text-3xl", "text-2xl", "text-xl", "text-lg"][level - 1] ?? "text-2xl";
-  return <Tag className={cn("font-semibold tracking-tight", size)}>{text}</Tag>;
+
+/**
+ * Resolve a brick's value across the binding sources, in precedence order:
+ *   bindField (current record, inside a Repeater) → bindKey (store) → static prop.
+ * Both hooks run unconditionally (Rules of Hooks); returns undefined when no
+ * binding yields a value so the caller falls back to its static prop.
+ */
+function useBoundValue(bindKey?: string, bindField?: string): unknown {
+  const recordVal = useRecordField(bindField);
+  const storeVal = useElementData<unknown>(bindKey, undefined);
+  if (bindField !== undefined && recordVal !== undefined) return recordVal;
+  if (bindKey !== undefined && storeVal !== undefined) return storeVal;
+  return undefined;
 }
 
-export function Text({ text, muted, bindKey }: TextProps) {
-  const live = useElementData<string | undefined>(bindKey, undefined);
-  const shown = live ?? text;
+export function Heading({ text, level, bindField }: HeadingProps) {
+  const bound = useBoundValue(undefined, bindField);
+  const shown = bound !== undefined ? String(bound) : text;
+  const Tag = (["h1", "h2", "h3", "h4"][level - 1] ?? "h2") as keyof React.JSX.IntrinsicElements;
+  const size = ["text-3xl", "text-2xl", "text-xl", "text-lg"][level - 1] ?? "text-2xl";
+  return <Tag className={cn("font-semibold tracking-tight", size)}>{shown}</Tag>;
+}
+
+export function Text({ text, muted, bindKey, bindField }: TextProps) {
+  const bound = useBoundValue(bindKey, bindField);
+  const shown = bound !== undefined ? String(bound) : text;
   return <p className={cn("text-sm leading-relaxed", muted && "text-[var(--muted-foreground)]")}>{shown}</p>;
 }
 
-export function Badge({ text, variant }: BadgeProps) {
+export function Badge({ text, variant, bindField }: BadgeProps) {
+  const bound = useBoundValue(undefined, bindField);
+  const shown = bound !== undefined ? String(bound) : text;
   const styles: Record<BadgeProps["variant"], string> = {
     default: "bg-[var(--secondary)] text-[var(--secondary-foreground)]",
     success: "bg-emerald-100 text-emerald-800",
@@ -168,14 +192,14 @@ export function Badge({ text, variant }: BadgeProps) {
   };
   return (
     <span className={cn("inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-xs font-medium", styles[variant])}>
-      {text}
+      {shown}
     </span>
   );
 }
 
-export function StatCard({ label, value, delta, trend, bindKey }: StatCardProps) {
-  const live = useElementData<string | number | undefined>(bindKey, undefined);
-  const shownValue = live !== undefined ? String(live) : value;
+export function StatCard({ label, value, delta, trend, bindKey, bindField }: StatCardProps) {
+  const bound = useBoundValue(bindKey, bindField);
+  const shownValue = bound !== undefined ? String(bound) : value;
   const trendColor = { up: "text-emerald-600", down: "text-red-600", flat: "text-[var(--muted-foreground)]" }[trend];
   const arrow = { up: "▲", down: "▼", flat: "→" }[trend];
   return (
@@ -281,9 +305,11 @@ export function Avatar({ name, src }: AvatarProps) {
   );
 }
 
-export function Image({ src, alt, rounded }: ImageProps) {
+export function Image({ src, alt, rounded, bindField }: ImageProps) {
+  const bound = useBoundValue(undefined, bindField);
+  const shownSrc = typeof bound === "string" && bound ? bound : src;
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt={alt} className={cn("max-w-full object-cover", rounded && "rounded-[var(--radius)]")} />;
+  return <img src={shownSrc} alt={alt} className={cn("max-w-full object-cover", rounded && "rounded-[var(--radius)]")} />;
 }
 
 export function Tabs({ tabs, children }: WithChildren<TabsProps>) {
@@ -612,24 +638,48 @@ export function ActionButton({ label, target, value, variant }: ActionButtonProp
 }
 
 // --- Form ---
-export function Input({ label, placeholder, type }: InputProps) {
+export function Input({ label, placeholder, type, bindKey }: InputProps) {
+  // Bound: write to the keyed store on change so a Form can collect it (and it
+  // doubles as a live filter). Unbound: plain uncontrolled input (no regression).
+  const live = useElementData<string | undefined>(bindKey, undefined);
+  const value = bindKey ? String(live ?? "") : undefined;
   return (
     <label className="flex flex-col gap-1.5 text-sm">
       {label && <span className="font-medium">{label}</span>}
       <input
         type={type}
         placeholder={placeholder}
+        {...(bindKey
+          ? {
+              value,
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                useWidgetStore.getState().set(
+                  bindKey,
+                  type === "number" ? Number(e.target.value) : e.target.value,
+                ),
+            }
+          : {})}
         className="h-9 rounded-[var(--radius)] border border-[var(--input)] bg-[var(--background)] px-3 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
       />
     </label>
   );
 }
 
-export function Select({ label, options }: SelectProps) {
+export function Select({ label, options, bindKey }: SelectProps) {
+  const live = useElementData<string | undefined>(bindKey, undefined);
   return (
     <label className="flex flex-col gap-1.5 text-sm">
       {label && <span className="font-medium">{label}</span>}
-      <select className="h-9 rounded-[var(--radius)] border border-[var(--input)] bg-[var(--background)] px-3 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]">
+      <select
+        {...(bindKey
+          ? {
+              value: String(live ?? options[0] ?? ""),
+              onChange: (e: React.ChangeEvent<HTMLSelectElement>) =>
+                useWidgetStore.getState().set(bindKey, e.target.value),
+            }
+          : {})}
+        className="h-9 rounded-[var(--radius)] border border-[var(--input)] bg-[var(--background)] px-3 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
+      >
         {options.map((o, i) => (
           <option key={i} value={o}>{o}</option>
         ))}
@@ -638,13 +688,141 @@ export function Select({ label, options }: SelectProps) {
   );
 }
 
-export function Checkbox({ label, checked }: CheckboxProps) {
-  const [value, setValue] = React.useState(checked);
+export function Checkbox({ label, checked, bindKey }: CheckboxProps) {
+  const live = useElementData<boolean | undefined>(bindKey, undefined);
+  const [local, setLocal] = React.useState(checked);
+  const value = bindKey ? (live ?? checked) : local;
   return (
     <label className="flex items-center gap-2 text-sm">
-      <input type="checkbox" checked={value} onChange={(e) => setValue(e.target.checked)} className="h-4 w-4 rounded border-[var(--input)]" />
+      <input
+        type="checkbox"
+        checked={value}
+        onChange={(e) => {
+          if (bindKey) useWidgetStore.getState().set(bindKey, e.target.checked);
+          else setLocal(e.target.checked);
+        }}
+        className="h-4 w-4 rounded border-[var(--input)]"
+      />
       <span>{label}</span>
     </label>
+  );
+}
+
+// --- Data layer bricks ---
+
+/** Fetch a dataset (through the authed proxy, or a direct public URL) into a
+ *  keyed store element. Charts/Repeaters/stats bound to `targetKey` update live. */
+export function ApiData(props: ApiDataProps) {
+  const { connectionId, endpointId, url, method, mode, query, headers, body, targetKey, jsonPath, intervalMs, label } = props;
+  const { data, error, isFetching } = useQuery({
+    queryKey: ["apidata", connectionId, endpointId, url, method, mode, JSON.stringify(query ?? null), JSON.stringify(body ?? null)],
+    queryFn: async () => {
+      if (mode === "direct" && url) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return getJsonPath(await res.json(), jsonPath);
+      }
+      const res = await fetch("/api/proxy", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ connectionId, endpointId, url, method, query, headers, body }),
+      });
+      const json = (await res.json()) as { ok?: boolean; status?: number; data?: unknown; error?: string };
+      if (!json.ok) throw new Error(json.error ?? `proxy error (${json.status})`);
+      return getJsonPath(json.data, jsonPath);
+    },
+    refetchInterval: intervalMs && intervalMs > 0 ? intervalMs : false,
+  });
+
+  React.useEffect(() => {
+    if (data !== undefined) useWidgetStore.getState().set(targetKey, data);
+  }, [data, targetKey]);
+
+  return (
+    <div className="flex items-center gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
+      <span className={cn("inline-block h-1.5 w-1.5 rounded-full", error ? "bg-red-500" : isFetching ? "bg-amber-500" : "bg-emerald-500")} />
+      {label ?? `Dataset → ${targetKey}`}
+      {error ? " (error)" : ""}
+    </div>
+  );
+}
+
+/** Render a child template once per record in a dataset array (store key), each
+ *  inside a RecordProvider so children resolve `bindField` against that record. */
+export function Repeater({ bindKey, empty, children }: WithChildren<RepeaterProps>) {
+  const records = useElementData<unknown[]>(bindKey, []);
+  const list = Array.isArray(records) ? records : [];
+  if (list.length === 0) {
+    return <p className="text-sm text-[var(--muted-foreground)]">{empty}</p>;
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {list.map((rec, i) => (
+        <RecordProvider key={i} record={rec}>
+          {children}
+        </RecordProvider>
+      ))}
+    </div>
+  );
+}
+
+/** Collect bound inputs under `fieldsPrefix` and submit them to a connection
+ *  endpoint (or direct URL) via the proxy; show success/error + refresh datasets. */
+export function Form(props: WithChildren<FormProps>) {
+  const { connectionId, endpointId, url, method, mode, fieldsPrefix, submitLabel, responseKey, successMessage, refetchKeys, children } = props;
+  const qc = useQueryClient();
+  const [status, setStatus] = React.useState<{ ok: boolean; msg: string } | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const body = assembleFormBody(useWidgetStore.getState().data, fieldsPrefix);
+      if (mode === "direct" && url) {
+        const res = await fetch(url, {
+          method,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json().catch(() => ({}));
+      }
+      const res = await fetch("/api/proxy", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ connectionId, endpointId, url, method, body }),
+      });
+      const json = (await res.json()) as { ok?: boolean; status?: number; data?: unknown; error?: string };
+      if (!json.ok) throw new Error(json.error ?? `submit failed (${json.status})`);
+      return json.data;
+    },
+    onSuccess: (data) => {
+      if (responseKey) useWidgetStore.getState().set(responseKey, data);
+      if (refetchKeys && refetchKeys.length > 0) {
+        void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "apidata" });
+      }
+      setStatus({ ok: true, msg: successMessage });
+    },
+    onError: (e) => setStatus({ ok: false, msg: e instanceof Error ? e.message : "Submit failed" }),
+  });
+
+  return (
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setStatus(null);
+        mutation.mutate();
+      }}
+    >
+      {children}
+      <div className="flex items-center gap-3">
+        <UIButton type="submit" disabled={mutation.isPending}>
+          {mutation.isPending ? "Submitting…" : submitLabel}
+        </UIButton>
+        {status && (
+          <span className={cn("text-sm", status.ok ? "text-emerald-600" : "text-red-600")}>{status.msg}</span>
+        )}
+      </div>
+    </form>
   );
 }
 
