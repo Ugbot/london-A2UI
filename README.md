@@ -1,121 +1,98 @@
-# CopilotKit <> PydanticAI Starter
+# london-A2UI — research → live reports, built from bricks
 
-This is a starter template for building AI agents using [PydanticAI](https://ai.pydantic.dev/) and [CopilotKit](https://copilotkit.ai). It provides a modern Next.js application with an integrated investment analyst agent that can research stocks, analyze market data, and provide investment insights.
+**Describe what you want to know. Get a living report.**
 
-## Prerequisites
+london-A2UI is an agent-driven **research and report-building tool**. Ask it a
+question in plain language and it will research the web, then *assemble* an
+interactive report on a live canvas — charts, KPI cards, tables, maps, network
+graphs, even live data feeds — and let you refine it conversationally ("make
+@btc-chart candlesticks", "now show it as a table", "recolour it").
 
-- OpenAI API Key (for the PydanticAI agent)
-- Python 3.12+
-- uv
-- Node.js 20+
-- Any of the following package managers:
-  - npm (default)
-  - [pnpm](https://pnpm.io/installation)
-  - [yarn](https://classic.yarnpkg.com/lang/en/docs/install/)
-  - [bun](https://bun.sh/)
+It builds **out of bricks, not sand**: the agent never writes raw HTML/JSX. It
+composes a validated tree of pre-built, typed React **bricks**, so generation is
+reliable and every report is editable, themeable, and shareable.
 
-## Getting Started
+---
 
-1. Install dependencies using your preferred package manager:
+## What it does
+
+- 🔎 **Research** — a `research` tool (Linkup) pulls up-to-date, *sourced*
+  answers and feeds them straight into a dashboard (summary, key stats, a
+  sources table).
+- 🧱 **Composes from ~40 typed bricks** — layout, charts (bar/line/area/pie/
+  scatter/**candlestick**/gauge/heatmap), tables, forms, maps (**vector OSM**),
+  **D3 force-graphs**, timelines, and more — validated against a Zod registry.
+- ✏️ **Refine by conversation** — edit any element in place; `@`-mention or click
+  a piece on the canvas to target it; swap a chart for a table, make it live,
+  recolour, add/remove/duplicate.
+- 📈 **Live & stateful** — bind elements to live data (`DataSource`, SSE,
+  Coinbase price feeds); build tabbed / master-detail mini-SPAs with shared
+  state and Hotwire-style stream updates.
+- 🧪 **Self-extending** — when no brick fits, the **foundry** installs an npm
+  library and forges a brand-new brick (with your approval, or "Auto") and adds
+  it to the known set. New widgets are embedded into a **pgvector cache** so the
+  agent reuses and gets faster over time.
+- 👥 **Optional live collaboration** — turn it on to co-build a report with live
+  cursors, presence, shared editing, and a shareable session URL.
+- 🛟 **Durable & resilient** — flaky network calls run as retrying, checkpointed
+  **DBOS** workflows; reports + chat persist to Postgres and restore per thread.
+
+## How it works
+
+```
+You ──▶ Chat (CopilotKit) ──▶ Agent (Mastra, in-process AG-UI)
+                                   │  tools: research · search/compose bricks ·
+                                   │         edit_element · bake/reuse · create_brick
+                                   ▼
+                         Composition tree (Zod-validated)
+                                   ▼
+                    Recursive <Renderer> ──▶ Live canvas
+                                   ▲
+                   pgvector cache · DBOS workflows · Yjs (opt-in collab)
+```
+
+The agent assembles a `CompositionNode` tree referencing bricks by name; a
+recursive renderer walks it onto the canvas. Successful reports are distilled
+into reusable templates and cached for next time.
+
+## Stack
+
+Next.js 16 · React 19 · CopilotKit v2 (AG-UI) · Mastra agent · Zod · Tailwind v4
+· recharts / D3 / Leaflet+MapLibre (vector tiles) · pgvector + Ollama embeddings
+· Yjs · TanStack Query / Zustand · DBOS · Linkup.
+
+## Getting started
+
+Prereqs: Node 20+, a container runtime (Docker/Podman) for the local Postgres
+(pgvector) + Redis stack, and Ollama with `nomic-embed-text` for embeddings.
 
 ```bash
-# Using npm (default)
 npm install
-
-# Using pnpm
-pnpm install
-
-# Using yarn
-yarn install
-
-# Using bun
-bun install
+cp .env.example .env   # then fill in the keys below
+npm run dev            # starts the pgvector/redis stack, collab server, and UI
 ```
 
-> **Note:** This will automatically setup the Python environment as well.
->
-> If you have manual issues, you can run:
->
-> ```sh
-> npm run install:agent
-> ```
+Open http://localhost:3000 and try:
 
-2. Set up your OpenAI API key:
+> "Research the 2025 EV market and build me a dashboard."
+> then: "make it a tabbed report with a chart and a sources table"
+> then: "@... recolour it green"
 
-Create a `.env` file in the project root with the following content:
+### Environment
 
 ```
-OPENAI_API_KEY=sk-...your-openai-key-here...
+OPENAI_API_KEY=...        # or set OPENAI_BASE_URL + AGENT_MODEL for a local model
+AGENT_MODEL=gpt-5.4-nano
+LINKUP_API_KEY=...        # web research
+# pgvector (the dev stack maps Postgres to :5433), Ollama, DBOS system DB — see .env.example
 ```
 
-3. Start the development server:
+## Tests
 
 ```bash
-# Using npm (default)
-npm run dev
-
-# Using pnpm
-pnpm dev
-
-# Using yarn
-yarn dev
-
-# Using bun
-bun run dev
+npm test   # vitest: composition validation, tree edits, store reducer
 ```
-
-This will start both the UI and agent servers concurrently.
-
-## Available Scripts
-
-The following scripts can also be run using your preferred package manager:
-
-- `dev` - Starts both UI and agent servers in development mode
-- `dev:debug` - Starts development servers with debug logging enabled
-- `dev:ui` - Starts only the Next.js UI server
-- `dev:agent` - Starts only the PydanticAI agent server
-- `build` - Builds the Next.js application for production
-- `start` - Starts the production server
-- `install:agent` - Installs Python dependencies for the agent
-
-## Documentation
-
-The main UI component is in `src/app/page.tsx`. You can:
-
-- Modify the theme colors and styling
-- Add new frontend actions
-- Customize the CopilotKit sidebar appearance
-
-## 📚 Documentation
-
-- [PydanticAI Documentation](https://ai.pydantic.dev) - Learn more about PydanticAI and its features
-- [CopilotKit Documentation](https://docs.copilotkit.ai) - Explore CopilotKit's capabilities
-- [Next.js Documentation](https://nextjs.org/docs) - Learn about Next.js features and API
-
-## Contributing
-
-Feel free to submit issues and enhancement requests! This starter is designed to be easily extensible.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Troubleshooting
-
-### Agent Connection Issues
-
-If you see "I'm having trouble connecting to my tools", make sure:
-
-1. The PydanticAI agent is running on port 8000
-2. Your OpenAI API key is set correctly
-3. Both servers started successfully
-
-### Python Dependencies
-
-If you encounter Python import errors:
-
-```bash
-cd agent
-uv sync
-uv run src/main.py
-```
+Apache-2.0 — see [LICENSE](./LICENSE).

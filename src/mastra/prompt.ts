@@ -71,7 +71,11 @@ Building stateful / interactive apps:
   read their live value from a keyed store element when bindKey is set.
 - "DataSource" polls a JSON URL into a keyed element; bind a chart/stat to the
   same key for live data. "ActionButton" sets a value on a keyed element on
-  click. "Screens" wraps multiple child compositions into a navigable mini-SPA.
+  click.
+- For a TABBED app/SPA: use "Tabs" (or "Screens") with one CHILD composition per
+  tab — the children are the rich tab panels, in the same order as the labels.
+  Do NOT cram a whole app into a single text "content"; give real child bricks.
+  "Screens" and "MasterDetail" are the other multi-view SPA wrappers.
 - Use the "stream_to_element" tool to push a live update (set/merge/append/
   remove) to any keyed element — update data without rebuilding the widget.
 

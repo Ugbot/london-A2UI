@@ -286,8 +286,11 @@ export function Image({ src, alt, rounded }: ImageProps) {
   return <img src={src} alt={alt} className={cn("max-w-full object-cover", rounded && "rounded-[var(--radius)]")} />;
 }
 
-export function Tabs({ tabs }: TabsProps) {
+export function Tabs({ tabs, children }: WithChildren<TabsProps>) {
   const [active, setActive] = React.useState(0);
+  // Rich mode: one child composition per tab. Text mode: tabs[i].content.
+  const panels = React.Children.toArray(children);
+  const hasPanels = panels.length > 0;
   return (
     <div className="flex flex-col gap-3">
       <div className="flex gap-1 border-b border-[var(--border)]">
@@ -306,7 +309,11 @@ export function Tabs({ tabs }: TabsProps) {
           </button>
         ))}
       </div>
-      <p className="text-sm leading-relaxed">{tabs[active]?.content}</p>
+      {hasPanels ? (
+        <div>{panels[active] ?? panels[0]}</div>
+      ) : (
+        <p className="text-sm leading-relaxed">{tabs[active]?.content}</p>
+      )}
     </div>
   );
 }

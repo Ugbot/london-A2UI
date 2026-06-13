@@ -115,9 +115,10 @@ export const BRICKS: BrickDef[] = [
   }),
   defineBrick({
     name: "Tabs",
-    description: "A tabbed panel switching between labelled text sections.",
-    tags: ["display", "tabs", "navigation", "sections"],
+    description: "A tabbed panel. For a rich tabbed SPA, give one CHILD composition per tab (in order, matching the `tabs` labels); or use text `content` per tab for simple sections.",
+    tags: ["display", "tabs", "tabbed", "spa", "navigation", "sections", "panel"],
     schema: S.tabsSchema,
+    acceptsChildren: true,
     Component: C.Tabs,
   }),
 

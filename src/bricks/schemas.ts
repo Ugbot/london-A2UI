@@ -95,8 +95,10 @@ export const imageSchema = z.object({
 });
 
 export const tabsSchema = z.object({
+  // Each tab has a label. Give it either text `content`, OR (for a rich tabbed
+  // SPA) one CHILD composition per tab, in order.
   tabs: z
-    .array(z.object({ label: z.string(), content: z.string() }))
+    .array(z.object({ label: z.string(), content: z.string().optional() }))
     .min(1),
 });
 
