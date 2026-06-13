@@ -17,6 +17,7 @@ import styles from "@/components/threads-drawer/threads-drawer.module.css";
 
 import { WidgetCanvas } from "@/components/WidgetCanvas";
 import { MentionOverlay } from "@/components/MentionOverlay";
+import { ExportMenu } from "@/components/ExportMenu";
 import { WidgetPreviewCard, AskUserCard, FoundryCard } from "@/components/chat-cards";
 import { useMentionStore } from "@/state/mentionStore";
 import { useFoundryStore } from "@/state/foundryStore";
@@ -377,6 +378,7 @@ export default function WidgetComposerPage() {
                   >
                     Auto bricks {autoBricks ? "on" : "off"}
                   </button>
+                  <ExportMenu widget={widget} onImport={(t) => applyTree(t)} />
                   <StyleMenu />
                   <CollabControls />
                 </div>
