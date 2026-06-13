@@ -7,6 +7,7 @@ import {
 import { MastraAgent } from "@ag-ui/mastra";
 import { handle } from "hono/vercel";
 import { widgetAgent } from "@/mastra/agent";
+import { sanitizeMessages } from "@/lib/sanitize-messages";
 
 // Run the agent in-process: MastraAgent is an AG-UI AbstractAgent — exactly the
 // shape the runtime expects (the same interface the old HttpAgent implemented),
@@ -54,7 +55,42 @@ const app = createCopilotEndpoint({
   basePath: "/api/copilotkit",
 });
 
+const honoPost = handle(app);
+
+/**
+ * Sanitize the conversation history on agent run/connect BEFORE the runtime
+ * processes it. A malformed tool call from a prior turn (e.g. args `{}{}`) would
+ * otherwise be JSON.parsed during replay and crash the run with RUN_ERROR —
+ * which then breaks selecting that thread entirely. We repair/drop those here at
+ * the boundary so a poisoned turn can never wedge a thread.
+ */
+export async function POST(req: Request) {
+  try {
+    const { pathname } = new URL(req.url);
+    if (/\/agent\/[^/]+\/(run|connect)$/.test(pathname)) {
+      const body = (await req.clone().json().catch(() => null)) as
+        | { messages?: unknown }
+        | null;
+      if (body && Array.isArray(body.messages)) {
+        const clean = sanitizeMessages(body.messages);
+        if (JSON.stringify(clean) !== JSON.stringify(body.messages)) {
+          const headers = new Headers(req.headers);
+          headers.delete("content-length"); // body length changed; let it recompute
+          const patched = new Request(req.url, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ ...body, messages: clean }),
+          });
+          return honoPost(patched);
+        }
+      }
+    }
+  } catch {
+    /* fall through to the unmodified request */
+  }
+  return honoPost(req);
+}
+
 export const GET = handle(app);
-export const POST = handle(app);
 export const PATCH = handle(app);
 export const DELETE = handle(app);
