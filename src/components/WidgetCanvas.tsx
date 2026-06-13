@@ -111,6 +111,9 @@ export function WidgetCanvas({ tree, status, onStatus, headerExtra }: WidgetCanv
           onClickCapture={onCanvasClick}
           className={cn(
             "widget-surface min-h-full rounded-[var(--radius)] p-3 transition-shadow duration-300",
+            // Paint the themed palette so style layers (esp. full themes) are
+            // visible: the surface takes the layer's background/foreground.
+            "bg-[var(--background)] text-[var(--foreground)]",
             flash && "ring-2 ring-[var(--primary)] ring-offset-2 ring-offset-[var(--background)]",
             selectMode && "cursor-crosshair",
           )}

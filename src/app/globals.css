@@ -70,6 +70,11 @@ html {
     border-color 250ms ease;
 }
 
+/* Style layers can swap the canvas font (e.g. a "Serif" or "Mono" theme). */
+.widget-surface {
+  font-family: var(--ui-font, inherit);
+}
+
 /* Live-animation keyframes used by the Animated brick. */
 @keyframes brick-fade {
   from { opacity: 0; }
