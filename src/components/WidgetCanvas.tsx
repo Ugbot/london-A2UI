@@ -12,6 +12,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { Renderer } from "@/components/Renderer";
 import { CursorLayer } from "@/collab/Cursors";
 import { useStyleLayers } from "@/style/StyleLayers";
+import { useMentionStore } from "@/state/mentionStore";
 import { cn } from "@/lib/utils";
 import type { CompositionNode } from "@/bricks/composition";
 import type { RenderStatus } from "@/lib/types";
@@ -43,8 +44,22 @@ function StatusPill({ status, updated }: { status: RenderStatus | null | undefin
 
 export function WidgetCanvas({ tree, status, onStatus, headerExtra }: WidgetCanvasProps) {
   const { mergedVars } = useStyleLayers();
+  const { selectMode, setSelectMode, targetId, selectElement, clearTarget } = useMentionStore();
   const prevKey = useRef<string>("");
   const [flash, setFlash] = useState(false);
+
+  // Click-to-target: in select mode, clicking a tagged element selects it
+  // (queues an @id into the chat input + highlights it).
+  const onCanvasClick = (e: React.MouseEvent) => {
+    if (!selectMode) return;
+    const el = (e.target as HTMLElement).closest("[data-brick-id]");
+    const id = el?.getAttribute("data-brick-id");
+    if (id) {
+      e.preventDefault();
+      e.stopPropagation();
+      selectElement(id);
+    }
+  };
 
   // Flag a clear "just updated" cue whenever the rendered tree actually changes.
   useEffect(() => {
@@ -66,14 +81,38 @@ export function WidgetCanvas({ tree, status, onStatus, headerExtra }: WidgetCanv
         <h1 className="text-sm font-semibold tracking-tight">Widget Canvas</h1>
         <div className="flex items-center gap-4">
           <StatusPill status={status} updated={flash} />
+          {targetId && (
+            <span className="flex items-center gap-1 rounded-full bg-[var(--secondary)] px-2 py-0.5 text-xs">
+              <span className="font-mono text-[var(--primary)]">@{targetId}</span>
+              <button onClick={clearTarget} className="text-[var(--muted-foreground)]">✕</button>
+            </span>
+          )}
+          <button
+            onClick={() => setSelectMode(!selectMode)}
+            className={cn(
+              "rounded-[var(--radius)] border px-2.5 py-1 text-xs font-medium",
+              selectMode
+                ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
+                : "border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:bg-[var(--secondary)]",
+            )}
+            title="Click an element on the canvas to @-target it"
+          >
+            {selectMode ? "Click an element…" : "Target"}
+          </button>
           {headerExtra}
         </div>
       </div>
+      {/* Highlight the targeted element's rendered root (contents wrapper child). */}
+      {targetId && (
+        <style>{`[data-brick-id="${targetId}"] > * { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--radius); }`}</style>
+      )}
       <div className="flex-1 overflow-auto p-3">
         <div
+          onClickCapture={onCanvasClick}
           className={cn(
             "widget-surface min-h-full rounded-[var(--radius)] p-3 transition-shadow duration-300",
             flash && "ring-2 ring-[var(--primary)] ring-offset-2 ring-offset-[var(--background)]",
+            selectMode && "cursor-crosshair",
           )}
           style={mergedVars as CSSProperties}
         >

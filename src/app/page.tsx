@@ -3,11 +3,12 @@
 import {
   useFrontendTool,
   useHumanInTheLoop,
+  useAgentContext,
   CopilotChatConfigurationProvider,
   CopilotSidebar,
 } from "@copilotkit/react-core/v2";
 import type { CSSProperties } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import { ThreadsDrawer } from "@/components/threads-drawer";
@@ -16,8 +17,22 @@ import styles from "@/components/threads-drawer/threads-drawer.module.css";
 
 import { WidgetCanvas } from "@/components/WidgetCanvas";
 import { WidgetPreviewCard, AskUserCard } from "@/components/chat-cards";
+import { useMentionStore } from "@/state/mentionStore";
 import { registry } from "@/bricks/registry";
-import { validateComposition, renderWidgetInputSchema } from "@/bricks/composition";
+import {
+  validateComposition,
+  renderWidgetInputSchema,
+  type CompositionNode,
+} from "@/bricks/composition";
+import {
+  ensureIds,
+  indexElements,
+  findById,
+  patchById,
+  removeById,
+  duplicateById,
+  insertChild,
+} from "@/bricks/tree";
 import type { RenderStatus } from "@/lib/types";
 import { streamToElement } from "@/state/store";
 import { useSharedWidget } from "@/collab/hooks";
@@ -37,9 +52,49 @@ export default function WidgetComposerPage() {
   const { toggleLayer, clearLayers } = useStyleLayers();
   const { enable: enableCollab, disable: disableCollab } = useCollab();
 
-  // Keep a stable ref to the (thread-scoped) setter for the load effect.
+  // Keep stable refs so frontend-tool handlers always see the latest widget +
+  // setter (handlers are registered once and would otherwise capture stale state).
   const setWidgetRef = useRef(setWidget);
   setWidgetRef.current = setWidget;
+  const widgetRef = useRef(widget);
+  widgetRef.current = widget;
+  const threadRef = useRef(threadId);
+  threadRef.current = threadId;
+
+  // Flat index of addressable elements — for @-mentions + agent context.
+  const elements = useMemo(() => indexElements(widget), [widget]);
+  // The element the user clicked-to-target on the canvas (if any).
+  const selectedId = useMentionStore((s) => s.targetId);
+
+  // Feed the current widget + element list + current selection to the agent
+  // every turn, so a follow-up prompt edits what's on the canvas, resolves
+  // @element-id mentions, and knows which element is currently targeted.
+  useAgentContext({
+    description:
+      "The current widget on the canvas (composition tree), its addressable elements (each with a stable id), and `selected` — the element the user has clicked-to-target (if any). Use this to EDIT the existing widget on follow-up requests, to resolve @element-id mentions, and when the user says 'this/it' without an id, prefer the `selected` element.",
+    value: JSON.stringify({ widget: widget ?? null, elements, selected: selectedId }),
+  });
+
+  /** Validate, assign ids, render to canvas, and persist. Shared by all edits. */
+  const applyTree = (tree: unknown): string => {
+    const result = validateComposition(tree, registry);
+    if (!result.ok) {
+      setStatus({ ok: false, stage: "validate", errors: result.errors });
+      return (
+        "The composition did not validate. Fix these and try again:\n" +
+        result.errors.map((e) => `- ${e.path}: ${e.message}`).join("\n")
+      );
+    }
+    const withIds = ensureIds(result.value);
+    setWidgetRef.current(withIds);
+    setStatus({ ok: true });
+    void fetch("/api/canvas", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ threadId: threadRef.current ?? "default", widget: withIds }),
+    }).catch(() => {});
+    return "Rendered successfully.";
+  };
 
   // Restore a thread's canvas from the DB when switching threads / on load.
   useEffect(() => {
@@ -76,27 +131,74 @@ export default function WidgetComposerPage() {
     description:
       "Render a widget onto the canvas. Pass the composition tree as the `tree` object argument (a JSON object, not a string). Returns 'Rendered successfully.' or validation errors to fix.",
     parameters: renderWidgetInputSchema,
-    handler: async ({ tree }) => {
-      const result = validateComposition(tree, registry);
-      if (!result.ok) {
-        setStatus({ ok: false, stage: "validate", errors: result.errors });
-        return (
-          "The composition did not validate. Fix these and call render_widget again:\n" +
-          result.errors.map((e) => `- ${e.path}: ${e.message}`).join("\n")
-        );
-      }
-      setWidget(result.value);
-      setStatus({ ok: true });
-      // Persist this thread's canvas so opening the chat later restores it.
-      void fetch("/api/canvas", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ threadId: threadId ?? "default", widget: result.value }),
-      }).catch(() => {});
-      return "Rendered successfully.";
-    },
+    handler: async ({ tree }) => applyTree(tree),
     // Show the assembled widget as a live preview in chat — not raw JSON.
     render: ({ args }) => <WidgetPreviewCard tree={args?.tree} />,
+  });
+
+  // --- In-place editing: refine the CURRENT widget by element id (@-targeting). ---
+  useFrontendTool({
+    name: "edit_element",
+    description:
+      "Edit one element of the current widget by id (resolve @mentions to ids). setProps shallow-merges props (recolor, relabel, change data). brick swaps the brick type (e.g. BarChart→CandlestickChart, LineChart→Table), carrying over compatible props. Use for targeted refinements instead of rebuilding.",
+    parameters: z.object({
+      id: z.string().describe("Target element id (without the @)"),
+      setProps: z.record(z.unknown()).optional(),
+      brick: z.string().optional().describe("New brick type to swap to"),
+    }),
+    handler: async ({ id, setProps, brick }) => {
+      const tree = widgetRef.current;
+      if (!tree) return "There is no widget on the canvas yet.";
+      if (!findById(tree, id)) {
+        return `No element "${id}". Available: ${indexElements(tree).map((e) => e.id).join(", ") || "(none)"}`;
+      }
+      if (brick && !registry.has(brick)) {
+        return `Unknown brick "${brick}". Use list_bricks/search_bricks.`;
+      }
+      return applyTree(patchById(tree, id, { setProps, brick }));
+    },
+  });
+
+  useFrontendTool({
+    name: "add_element",
+    description:
+      "Add a new element (a composition node) as a child of an existing container element (by id). Use to insert a brick next to others.",
+    parameters: z.object({
+      parentId: z.string().describe("Id of a container element (Stack/Grid/Section/Card)"),
+      node: renderWidgetInputSchema.shape.tree,
+      index: z.number().int().optional(),
+    }),
+    handler: async ({ parentId, node, index }) => {
+      const tree = widgetRef.current;
+      if (!tree) return "There is no widget on the canvas yet.";
+      if (!findById(tree, parentId)) return `No container "${parentId}".`;
+      return applyTree(insertChild(tree, parentId, node as CompositionNode, index));
+    },
+  });
+
+  useFrontendTool({
+    name: "remove_element",
+    description: "Remove an element from the current widget by id.",
+    parameters: z.object({ id: z.string() }),
+    handler: async ({ id }) => {
+      const tree = widgetRef.current;
+      if (!tree) return "There is no widget on the canvas yet.";
+      const next = removeById(tree, id);
+      if (!next) return "Can't remove the root element; rebuild instead.";
+      return applyTree(next);
+    },
+  });
+
+  useFrontendTool({
+    name: "duplicate_element",
+    description: "Duplicate an element (by id) as its next sibling.",
+    parameters: z.object({ id: z.string() }),
+    handler: async ({ id }) => {
+      const tree = widgetRef.current;
+      if (!tree) return "There is no widget on the canvas yet.";
+      if (!findById(tree, id)) return `No element "${id}".`;
+      return applyTree(duplicateById(tree, id));
+    },
   });
 
   // Hotwire/Turbo-Stream-style messaging: push a live update to any keyed
@@ -209,7 +311,7 @@ export default function WidgetComposerPage() {
               labels={{
                 modalHeaderTitle: "Widget Composer",
                 welcomeMessageText:
-                  "👋 Describe a widget — I'll assemble it from bricks. Try: \"a crypto dashboard with live BTC and ETH charts\", \"a sales dashboard\", or \"a store map of our London offices\".",
+                  "👋 Describe a widget — I'll assemble it from bricks, then refine it. Try: \"a crypto dashboard\", then \"make @btc-chart candlesticks\". Use the Target button to click a piece, or type its @id.",
               }}
             />
           </main>

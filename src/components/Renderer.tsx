@@ -33,16 +33,27 @@ function NodeRenderer({ node }: { node: CompositionNode }): React.ReactElement {
   const props = resolveProps(node, registry);
   const Component = brick.Component;
 
-  if (brick.acceptsChildren && node.children?.length) {
-    return (
+  const rendered =
+    brick.acceptsChildren && node.children?.length ? (
       <Component {...props}>
         {node.children.map((child, i) => (
           <NodeRenderer key={i} node={child} />
         ))}
       </Component>
+    ) : (
+      <Component {...props} />
+    );
+
+  // Tag each addressable node for @-targeting (click-to-select + highlight).
+  // `display: contents` keeps the wrapper out of layout so Grid/Stack are intact.
+  if (node.id) {
+    return (
+      <div className="contents" data-brick-id={node.id}>
+        {rendered}
+      </div>
     );
   }
-  return <Component {...props} />;
+  return rendered;
 }
 
 interface BoundaryProps {

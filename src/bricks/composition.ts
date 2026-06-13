@@ -11,13 +11,16 @@ import type { BrickDef, Hole } from "./types";
 /** A node in a concrete composition tree (all props filled after parsing). */
 export interface CompositionNode {
   brick: string;
+  /** Stable handle for @-targeting and in-place editing (optional). */
+  id?: string;
   props: Record<string, unknown>;
   children?: CompositionNode[];
 }
 
-/** Input shape before parsing — `props` may be omitted (defaults to `{}`). */
+/** Input shape before parsing — `props`/`id` may be omitted. */
 interface CompositionNodeInput {
   brick: string;
+  id?: string;
   props?: Record<string, unknown>;
   children?: CompositionNodeInput[];
 }
@@ -30,6 +33,7 @@ export const compositionNodeSchema: z.ZodType<
 > = z.lazy(() =>
   z.object({
     brick: z.string().min(1),
+    id: z.string().optional(),
     props: z.record(z.unknown()).default({}),
     children: z.array(compositionNodeSchema).optional(),
   }),
