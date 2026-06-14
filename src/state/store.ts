@@ -1,19 +1,27 @@
 "use client";
 
 /**
- * Per-canvas reactive data store, keyed by element id — the "state in the thing
- * we're building". Bricks read a key with `useElementData` and re-render live
- * when anyone updates it.
+ * Per-session reactive read-model — "the state in the thing we're building".
  *
- * Updates are modelled as Hotwire/Turbo-Stream-style actions targeting a key:
- *   set     — replace the value at target
- *   merge   — shallow-merge into an object value
- *   append  — push onto an array value
- *   remove  — delete the key
- * This lets the agent, a DataSource brick, or a peer surgically change parts of
- * a live widget by addressing keyed elements.
+ * The read-model now lives in the ONE Yjs session doc (see `@/collab/doc-model`), so
+ * data changes share the doc's history, rewind, and cross-thread/collab sync. This
+ * module keeps the OLD imperative API (`useWidgetStore.getState().{data,set,get,apply,
+ * reset}`, `streamToElement`, `registerDerived`) as a thin shim that delegates to the
+ * active session doc, so callers not yet migrated to `dispatch()` keep working. It is
+ * deprecated — new code should use `dispatch()` / `useElementData` directly.
+ *
+ * Updates use the Turbo-Stream vocabulary (set / merge / append / remove), implemented
+ * once in `applyDataAction`.
  */
-import { create } from "zustand";
+import { getActiveDoc } from "@/engine/doc-registry";
+import {
+  ORIGIN,
+  getData,
+  readData,
+  readAllData,
+  applyDataAction,
+} from "@/collab/doc-model";
+import { registerDerivation } from "@/engine/derive";
 
 export type StreamActionType = "set" | "merge" | "append" | "remove";
 
@@ -23,84 +31,56 @@ export interface StreamAction {
   value?: unknown;
 }
 
-interface WidgetStateStore {
-  data: Record<string, unknown>;
-  apply: (action: StreamAction) => void;
-  set: (key: string, value: unknown) => void;
-  get: (key: string) => unknown;
-  reset: () => void;
-}
+/** Imperative read-model accessor backed by the active Yjs doc (no active doc → no-op). */
+const widgetStoreState = {
+  get data(): Record<string, unknown> {
+    const doc = getActiveDoc();
+    return doc ? readAllData(doc) : {};
+  },
+  apply(action: StreamAction): void {
+    const doc = getActiveDoc();
+    if (doc) applyDataAction(doc, action, ORIGIN.local);
+  },
+  set(key: string, value: unknown): void {
+    const doc = getActiveDoc();
+    if (doc) applyDataAction(doc, { action: "set", target: key, value }, ORIGIN.local);
+  },
+  get(key: string): unknown {
+    const doc = getActiveDoc();
+    return doc ? readData(doc, key) : undefined;
+  },
+  reset(): void {
+    const doc = getActiveDoc();
+    if (!doc) return;
+    const data = getData(doc);
+    doc.transact(() => {
+      for (const k of [...data.keys()]) data.delete(k);
+    }, ORIGIN.local);
+  },
+};
 
-export const useWidgetStore = create<WidgetStateStore>((set, get) => ({
-  data: {},
-  apply: (action) =>
-    set((state) => {
-      const data = { ...state.data };
-      const cur = data[action.target];
-      switch (action.action) {
-        case "set":
-          data[action.target] = action.value;
-          break;
-        case "merge":
-          data[action.target] = {
-            ...(typeof cur === "object" && cur ? (cur as object) : {}),
-            ...(typeof action.value === "object" && action.value ? (action.value as object) : {}),
-          };
-          break;
-        case "append": {
-          const arr = Array.isArray(cur) ? [...cur] : [];
-          arr.push(action.value);
-          data[action.target] = arr;
-          break;
-        }
-        case "remove":
-          delete data[action.target];
-          break;
-      }
-      return { data };
-    }),
-  set: (key, value) => get().apply({ action: "set", target: key, value }),
-  get: (key) => get().data[key],
-  reset: () => set({ data: {} }),
-}));
+/** @deprecated Use `dispatch()` / `useElementData`. Thin shim over the Yjs read-model. */
+export const useWidgetStore = {
+  getState: () => widgetStoreState,
+};
 
-/** Apply a stream action to the canvas store (callable outside React). */
+/** Apply a stream action to the active session read-model (callable outside React). */
 export function streamToElement(action: StreamAction): void {
-  useWidgetStore.getState().apply(action);
+  const doc = getActiveDoc();
+  if (doc) applyDataAction(doc, action, ORIGIN.agent);
 }
 
 /**
- * Register a DERIVED key: recompute `compute(depValues, get)` whenever any
- * dependency key changes, and write the result to `key`. The reactive backbone
- * for mortar — a computed value propagates to every brick bound to `key` in real
- * time (Zustand subscription graph). Returns an unsubscribe; recomputes once now.
+ * Register a DERIVED key: recompute `compute(depValues, get)` whenever any dependency
+ * changes, writing the result to `key`. Backed by the Yjs read-model now. Returns an
+ * unsubscribe; recomputes once. No-op (returns a noop unsub) when no doc is active.
  */
 export function registerDerived(
   key: string,
   deps: string[],
   compute: (depValues: unknown[], get: (k: string) => unknown) => unknown,
 ): () => void {
-  const get = (k: string) => useWidgetStore.getState().data[k];
-  const recompute = () => {
-    let next: unknown;
-    try {
-      next = compute(deps.map(get), get);
-    } catch {
-      return; // a throwing derivation must not break the store
-    }
-    if (next !== useWidgetStore.getState().data[key]) {
-      useWidgetStore.getState().set(key, next);
-    }
-  };
-
-  let prev = deps.map(get);
-  const unsub = useWidgetStore.subscribe((state) => {
-    const cur = deps.map((d) => state.data[d]);
-    if (cur.some((v, i) => v !== prev[i])) {
-      prev = cur;
-      recompute();
-    }
-  });
-  recompute();
-  return unsub;
+  const doc = getActiveDoc();
+  if (!doc) return () => {};
+  return registerDerivation(doc, key, deps, compute);
 }

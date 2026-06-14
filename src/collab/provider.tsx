@@ -9,6 +9,7 @@
 import * as React from "react";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
+import { setActiveDoc } from "@/engine/doc-registry";
 
 // @ag-ui/client stores `this.fetch = config.fetch ?? fetch` and later calls
 // `this.fetch(url, init)` — invoking native fetch as a method throws
@@ -122,6 +123,14 @@ export function CollabProvider({ children }: { children: React.ReactNode }) {
 
   const enable = React.useCallback(() => setEnabled(true), []);
   const disable = React.useCallback(() => setEnabled(false), []);
+
+  // Register this session's doc so imperative callers (agent tools, brick event
+  // handlers, dispatch()) operate on the SAME doc components read. Client-only
+  // effect — no active doc during SSR, so no cross-request module-singleton leak.
+  React.useEffect(() => {
+    setActiveDoc(doc);
+    return () => setActiveDoc(null);
+  }, [doc]);
 
   // Switch the active session (selecting/creating a thread or report). This is
   // the SINGLE id behind the canvas, chat, report, and (when on) the collab room.

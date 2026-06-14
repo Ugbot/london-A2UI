@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import * as Y from "yjs";
+import { setActiveDoc } from "@/engine/doc-registry";
 import { useWidgetStore, streamToElement } from "./store";
 
 describe("widget store stream actions", () => {
-  beforeEach(() => useWidgetStore.getState().reset());
+  // The shim delegates to the active session doc; give each test a fresh one.
+  beforeEach(() => setActiveDoc(new Y.Doc()));
 
   it("set replaces the value at a key", () => {
     streamToElement({ action: "set", target: "k", value: 42 });
