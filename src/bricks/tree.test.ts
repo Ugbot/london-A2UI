@@ -31,6 +31,11 @@ describe("moveNode (drag-to-rearrange)", () => {
     expect(order(r)).toEqual(["b", "a", "c"]);
   });
 
+  it("supports position 'after' (move a after b)", () => {
+    const r = moveNode(make(), "a", "b", "after");
+    expect(order(r)).toEqual(["b", "a", "c"]);
+  });
+
   it("reparents a node before a target in another container (move a before d)", () => {
     const r = moveNode(make(), "a", "d");
     expect(order(r)).toEqual(["b", "c"]); // a left the root

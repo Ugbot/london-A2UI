@@ -28,7 +28,7 @@ export interface WidgetCanvasProps {
   /** Action controls rendered on the right of the toolbar. */
   headerExtra?: ReactNode;
   /** Apply a drag-to-rearrange reorder (transactional/undoable in the parent). */
-  onMove?: (dragId: string, beforeId: string) => void;
+  onMove?: (dragId: string, targetId: string, position: "before" | "after") => void;
 }
 
 export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report", headerExtra, onMove }: WidgetCanvasProps) {

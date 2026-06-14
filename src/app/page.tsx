@@ -458,9 +458,9 @@ export default function WidgetComposerPage() {
               status={status}
               onStatus={setStatus}
               title={reportTitle}
-              onMove={(dragId, beforeId) => {
+              onMove={(dragId, targetId, position) => {
                 const t = widgetRef.current;
-                if (t) applyTree(moveNode(t, dragId, beforeId));
+                if (t) applyTree(moveNode(t, dragId, targetId, position));
               }}
               headerExtra={
                 <div className="flex items-center gap-3">

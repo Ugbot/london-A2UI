@@ -160,6 +160,7 @@ export function moveNode(
   tree: CompositionNode,
   dragId: string,
   targetId: string,
+  position: "before" | "after" = "before",
 ): CompositionNode {
   if (dragId === targetId) return tree;
   if (tree.id === dragId) return tree; // can't move the root
@@ -178,7 +179,7 @@ export function moveNode(
     const idx = kids.findIndex((c) => c.id === targetId);
     if (idx !== -1) {
       const next = [...kids];
-      next.splice(idx, 0, moved);
+      next.splice(position === "after" ? idx + 1 : idx, 0, moved);
       inserted = true;
       return { ...n, children: next };
     }
