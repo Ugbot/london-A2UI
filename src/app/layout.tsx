@@ -5,6 +5,7 @@ import { CopilotKit } from "@copilotkit/react-core/v2";
 import { CollabProvider } from "@/collab/provider";
 import { StyleLayersProvider } from "@/style/StyleLayers";
 import { EngineProvider } from "@/engine/EngineProvider";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import "./globals.css";
 import "@copilotkit/react-core/v2/styles.css";
 
@@ -37,6 +38,7 @@ export default function RootLayout({
         />
       </head>
       <body className={"antialiased"}>
+        <ServiceWorkerRegister />
         {/* Force REST transport so runtime-info + threads both hit the multi-route endpoint (auto-detect races the lazily-compiled API route in next dev). */}
         <CopilotKit
           runtimeUrl="/api/copilotkit"

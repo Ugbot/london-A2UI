@@ -21,6 +21,15 @@ const nextConfig: NextConfig = {
     // the runtime route in this example. Keep builds focused on runtime output.
     ignoreBuildErrors: true,
   },
+  // The service worker must never be cached itself, or SW updates won't ship.
+  async headers() {
+    return [
+      {
+        source: "/sw.js",
+        headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

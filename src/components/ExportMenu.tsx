@@ -6,7 +6,10 @@
  * canvas surface; live feeds / WebGL maps are frozen in those formats.
  */
 import * as React from "react";
+import * as Y from "yjs";
 import type { CompositionNode } from "@/bricks/composition";
+import { getActiveDoc } from "@/engine/doc-registry";
+import { buildReportBundle, bytesToBase64 } from "@/export/pwa";
 
 const THEME_VARS = [
   "--background", "--foreground", "--card", "--card-foreground", "--primary",
@@ -74,6 +77,23 @@ export function ExportMenu({
     download("report.html", html, "text/html");
   };
 
+  const exportPwa = () => {
+    const el = surfaceEl();
+    if (!el) return;
+    const cs = getComputedStyle(document.documentElement);
+    const themeCss = THEME_VARS.map((v) => `  ${v}: ${cs.getPropertyValue(v).trim()};`).join("\n");
+    const doc = getActiveDoc();
+    const stateUpdateB64 = doc ? bytesToBase64(Y.encodeStateAsUpdate(doc)) : "";
+    const html = buildReportBundle({
+      title: "A2UI Report",
+      bodyHtml: el.innerHTML,
+      themeCss,
+      tree: widget,
+      stateUpdateB64,
+    });
+    download("report.pwa.html", html, "text/html");
+  };
+
   const exportPng = async () => {
     const el = surfaceEl();
     if (!el) return;
@@ -136,6 +156,7 @@ export function ExportMenu({
           <Item label="Import JSON…" onClick={() => fileRef.current?.click()} />
           <div className="my-1 border-t border-[var(--border)]" />
           <Item label="Standalone HTML" onClick={exportHtml} />
+          <Item label="PWA report (offline)" onClick={exportPwa} />
           <Item label="React (.tsx)" onClick={exportReact} />
           <Item label="PNG image" onClick={() => void exportPng()} />
           <Item label="PDF" onClick={() => void exportPdf()} />
