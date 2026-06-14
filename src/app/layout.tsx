@@ -4,7 +4,7 @@ import { Inter } from "next/font/google";
 import { CopilotKit } from "@copilotkit/react-core/v2";
 import { CollabProvider } from "@/collab/provider";
 import { StyleLayersProvider } from "@/style/StyleLayers";
-import { QueryProvider } from "@/state/QueryProvider";
+import { EngineProvider } from "@/engine/EngineProvider";
 import "./globals.css";
 import "@copilotkit/react-core/v2/styles.css";
 
@@ -44,7 +44,7 @@ export default function RootLayout({
         >
           <CollabProvider>
             <StyleLayersProvider>
-              <QueryProvider>{children}</QueryProvider>
+              <EngineProvider>{children}</EngineProvider>
             </StyleLayersProvider>
           </CollabProvider>
         </CopilotKit>

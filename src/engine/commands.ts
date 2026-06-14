@@ -69,6 +69,51 @@ const treeInsert = z.object({
 const treeRemove = z.object({ type: z.literal("tree/remove"), id: z.string().min(1) });
 const treeDuplicate = z.object({ type: z.literal("tree/duplicate"), id: z.string().min(1) });
 
+/**
+ * A data source: a proxied connection/endpoint (default, secrets stay server-side) OR
+ * a direct public URL. The worker POSTs this to /api/proxy (or fetches `url` directly).
+ */
+export const dataSourceSchema = z.object({
+  mode: z.enum(["proxy", "direct"]).default("proxy"),
+  connectionId: z.string().optional(),
+  endpointId: z.string().optional(),
+  url: z.string().optional(),
+  method: z.string().optional(),
+  query: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
+  headers: z.record(z.string()).optional(),
+  body: z.unknown().optional(),
+});
+export type DataSourceSpec = z.infer<typeof dataSourceSchema>;
+
+// --- Worker-bound commands (run in the fetch worker; results sync back via Yjs) ---
+
+/** One-shot fetch: load `source` → jsonPath → optional mortar transform → key. */
+const dataFetch = z.object({
+  type: z.literal("data/fetch"),
+  key: z.string().min(1),
+  source: dataSourceSchema,
+  jsonPath: z.string().optional(),
+  transform: z.string().optional(),
+});
+/** Start polling `source` into `key` every intervalMs (worker owns the timer). */
+const dataPollStart = z.object({
+  type: z.literal("data/poll-start"),
+  key: z.string().min(1),
+  source: dataSourceSchema,
+  jsonPath: z.string().optional(),
+  transform: z.string().optional(),
+  intervalMs: z.number().int().positive(),
+});
+const dataPollStop = z.object({ type: z.literal("data/poll-stop"), key: z.string().min(1) });
+/** Assemble bound form fields → submit → write response → refetch datasets. */
+const formSubmit = z.object({
+  type: z.literal("form/submit"),
+  source: dataSourceSchema,
+  fieldsPrefix: z.string(),
+  responseKey: z.string().optional(),
+  refetchKeys: z.array(z.string()).optional(),
+});
+
 export const commandSchema = z.discriminatedUnion("type", [
   dataSet,
   deriveRegister,
@@ -80,6 +125,18 @@ export const commandSchema = z.discriminatedUnion("type", [
   treeInsert,
   treeRemove,
   treeDuplicate,
+  dataFetch,
+  dataPollStart,
+  dataPollStop,
+  formSubmit,
+]);
+
+/** Commands handled by the worker pool (everything else applies on the main doc). */
+export const WORKER_COMMANDS: ReadonlySet<string> = new Set([
+  "data/fetch",
+  "data/poll-start",
+  "data/poll-stop",
+  "form/submit",
 ]);
 
 export type Command = z.infer<typeof commandSchema>;

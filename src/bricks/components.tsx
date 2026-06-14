@@ -22,12 +22,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useElementData } from "@/state/hooks";
 import { useWidgetStore } from "@/state/store";
+import { dispatch } from "@/engine/dispatch";
+import { statusKey, errorKey } from "@/engine/data-engine";
 import { RecordProvider, useRecordField, useRecord } from "@/state/record";
-import { assembleFormBody } from "./form-util";
 import { runMortar } from "@/mortar/run";
 import { useCompleteStore } from "@/state/completeStore";
 import {
@@ -576,40 +576,30 @@ export function Animated({ animation, duration, loop, children }: WithChildren<A
 }
 
 // --- Stateful / SPA ---
-function getJsonPath(obj: unknown, path?: string): unknown {
-  if (!path) return obj;
-  return path.split(".").reduce<unknown>((acc, k) => {
-    if (acc && typeof acc === "object") return (acc as Record<string, unknown>)[k];
-    return undefined;
-  }, obj);
-}
-
 export function DataSource({ url, targetKey, jsonPath, intervalMs, label }: DataSourceProps) {
-  const { data, error, isFetching } = useQuery({
-    queryKey: ["datasource", url, jsonPath],
-    queryFn: async () => {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return getJsonPath(await res.json(), jsonPath);
-    },
-    refetchInterval: intervalMs,
-  });
+  // Fetching is owned by the worker pool: this brick just declares the poll and reads
+  // back the live status the engine publishes to `${targetKey}__status`.
+  const status = useElementData<string | undefined>(statusKey(targetKey), undefined);
 
-  // Push fetched values into the keyed store so bound bricks update live.
   React.useEffect(() => {
-    if (data !== undefined) useWidgetStore.getState().set(targetKey, data);
-  }, [data, targetKey]);
+    const source = { mode: "direct" as const, url };
+    if (intervalMs && intervalMs > 0) {
+      dispatch({ type: "data/poll-start", key: targetKey, source, jsonPath, intervalMs });
+      return () => void dispatch({ type: "data/poll-stop", key: targetKey });
+    }
+    dispatch({ type: "data/fetch", key: targetKey, source, jsonPath });
+  }, [url, targetKey, jsonPath, intervalMs]);
 
   return (
     <div className="flex items-center gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
       <span
         className={cn(
           "inline-block h-1.5 w-1.5 rounded-full",
-          error ? "bg-red-500" : isFetching ? "bg-amber-500" : "bg-emerald-500",
+          status === "error" ? "bg-red-500" : status === "live" ? "bg-emerald-500" : "bg-amber-500",
         )}
       />
       {label ?? `Live data → ${targetKey}`}
-      {error ? " (error)" : ""}
+      {status === "error" ? " (error)" : ""}
     </div>
   );
 }
@@ -642,7 +632,10 @@ export function Screens({ labels, children }: WithChildren<ScreensProps>) {
 
 export function ActionButton({ label, target, value, variant }: ActionButtonProps) {
   return (
-    <UIButton variant={variant} onClick={() => useWidgetStore.getState().set(target, value)}>
+    <UIButton
+      variant={variant}
+      onClick={() => dispatch({ type: "data/set", target, value })}
+    >
       {label}
     </UIButton>
   );
@@ -664,10 +657,11 @@ export function Input({ label, placeholder, type, bindKey }: InputProps) {
           ? {
               value,
               onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                useWidgetStore.getState().set(
-                  bindKey,
-                  type === "number" ? Number(e.target.value) : e.target.value,
-                ),
+                dispatch({
+                  type: "data/set",
+                  target: bindKey,
+                  value: type === "number" ? Number(e.target.value) : e.target.value,
+                }),
             }
           : {})}
         className="h-9 rounded-[var(--radius)] border border-[var(--input)] bg-[var(--background)] px-3 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
@@ -686,7 +680,7 @@ export function Select({ label, options, bindKey }: SelectProps) {
           ? {
               value: String(live ?? options[0] ?? ""),
               onChange: (e: React.ChangeEvent<HTMLSelectElement>) =>
-                useWidgetStore.getState().set(bindKey, e.target.value),
+                dispatch({ type: "data/set", target: bindKey, value: e.target.value }),
             }
           : {})}
         className="h-9 rounded-[var(--radius)] border border-[var(--input)] bg-[var(--background)] px-3 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
@@ -709,7 +703,7 @@ export function Checkbox({ label, checked, bindKey }: CheckboxProps) {
         type="checkbox"
         checked={value}
         onChange={(e) => {
-          if (bindKey) useWidgetStore.getState().set(bindKey, e.target.checked);
+          if (bindKey) dispatch({ type: "data/set", target: bindKey, value: e.target.checked });
           else setLocal(e.target.checked);
         }}
         className="h-4 w-4 rounded border-[var(--input)]"
@@ -725,42 +719,35 @@ export function Checkbox({ label, checked, bindKey }: CheckboxProps) {
  *  keyed store element. Charts/Repeaters/stats bound to `targetKey` update live. */
 export function ApiData(props: ApiDataProps) {
   const { connectionId, endpointId, url, method, mode, query, headers, body, targetKey, jsonPath, transform, intervalMs, label } = props;
-  const { data, error, isFetching } = useQuery({
-    queryKey: ["apidata", connectionId, endpointId, url, method, mode, JSON.stringify(query ?? null), JSON.stringify(body ?? null), transform ?? ""],
-    queryFn: async () => {
-      const shape = (raw: unknown) => {
-        const picked = getJsonPath(raw, jsonPath);
-        // Mortar: reshape the response into brick-ready data before storing.
-        return transform
-          ? runMortar(transform, picked, { get: (k: string) => useWidgetStore.getState().data[k] })
-          : picked;
-      };
-      if (mode === "direct" && url) {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return shape(await res.json());
-      }
-      const res = await fetch("/api/proxy", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ connectionId, endpointId, url, method, query, headers, body }),
-      });
-      const json = (await res.json()) as { ok?: boolean; status?: number; data?: unknown; error?: string };
-      if (!json.ok) throw new Error(json.error ?? `proxy error (${json.status})`);
-      return shape(json.data);
-    },
-    refetchInterval: intervalMs && intervalMs > 0 ? intervalMs : false,
-  });
+  // Fetching (proxy/direct + jsonPath + mortar transform) is owned by the worker pool;
+  // this brick declares the fetch/poll and reads back the engine's status.
+  const status = useElementData<string | undefined>(statusKey(targetKey), undefined);
+  const sig = JSON.stringify({ mode, connectionId, endpointId, url, method, query, headers, body, jsonPath, transform, intervalMs });
 
   React.useEffect(() => {
-    if (data !== undefined) useWidgetStore.getState().set(targetKey, data);
-  }, [data, targetKey]);
+    const source = {
+      mode: (mode ?? "proxy") as "proxy" | "direct",
+      connectionId,
+      endpointId,
+      url,
+      method,
+      query: query as Record<string, string | number | boolean> | undefined,
+      headers,
+      body,
+    };
+    if (intervalMs && intervalMs > 0) {
+      dispatch({ type: "data/poll-start", key: targetKey, source, jsonPath, transform, intervalMs });
+      return () => void dispatch({ type: "data/poll-stop", key: targetKey });
+    }
+    dispatch({ type: "data/fetch", key: targetKey, source, jsonPath, transform });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetKey, sig]);
 
   return (
     <div className="flex items-center gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--muted)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
-      <span className={cn("inline-block h-1.5 w-1.5 rounded-full", error ? "bg-red-500" : isFetching ? "bg-amber-500" : "bg-emerald-500")} />
+      <span className={cn("inline-block h-1.5 w-1.5 rounded-full", status === "error" ? "bg-red-500" : status === "live" ? "bg-emerald-500" : "bg-amber-500")} />
       {label ?? `Dataset → ${targetKey}`}
-      {error ? " (error)" : ""}
+      {status === "error" ? " (error)" : ""}
     </div>
   );
 }
@@ -788,57 +775,41 @@ export function Repeater({ bindKey, empty, children }: WithChildren<RepeaterProp
  *  endpoint (or direct URL) via the proxy; show success/error + refresh datasets. */
 export function Form(props: WithChildren<FormProps>) {
   const { connectionId, endpointId, url, method, mode, fieldsPrefix, submitLabel, responseKey, successMessage, refetchKeys, children } = props;
-  const qc = useQueryClient();
-  const [status, setStatus] = React.useState<{ ok: boolean; msg: string } | null>(null);
-
-  const mutation = useMutation({
-    mutationFn: async () => {
-      const body = assembleFormBody(useWidgetStore.getState().data, fieldsPrefix);
-      if (mode === "direct" && url) {
-        const res = await fetch(url, {
-          method,
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json().catch(() => ({}));
-      }
-      const res = await fetch("/api/proxy", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ connectionId, endpointId, url, method, body }),
-      });
-      const json = (await res.json()) as { ok?: boolean; status?: number; data?: unknown; error?: string };
-      if (!json.ok) throw new Error(json.error ?? `submit failed (${json.status})`);
-      return json.data;
-    },
-    onSuccess: (data) => {
-      if (responseKey) useWidgetStore.getState().set(responseKey, data);
-      if (refetchKeys && refetchKeys.length > 0) {
-        void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "apidata" });
-      }
-      setStatus({ ok: true, msg: successMessage });
-    },
-    onError: (e) => setStatus({ ok: false, msg: e instanceof Error ? e.message : "Submit failed" }),
-  });
+  // Submit is owned by the worker pool: it assembles the bound fields from the synced
+  // read-model, POSTs via the proxy, writes the response, and refetches datasets. We
+  // read the engine's status for this form (keyed `form:<prefix>`).
+  const statusTarget = `form:${fieldsPrefix}`;
+  const status = useElementData<string | undefined>(statusKey(statusTarget), undefined);
+  const err = useElementData<string | undefined>(errorKey(statusTarget), undefined);
+  const pending = status === "loading";
 
   return (
     <form
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
-        setStatus(null);
-        mutation.mutate();
+        dispatch({
+          type: "form/submit",
+          source: {
+            mode: (mode ?? "proxy") as "proxy" | "direct",
+            connectionId,
+            endpointId,
+            url,
+            method,
+          },
+          fieldsPrefix,
+          responseKey,
+          refetchKeys,
+        });
       }}
     >
       {children}
       <div className="flex items-center gap-3">
-        <UIButton type="submit" disabled={mutation.isPending}>
-          {mutation.isPending ? "Submitting…" : submitLabel}
+        <UIButton type="submit" disabled={pending}>
+          {pending ? "Submitting…" : submitLabel}
         </UIButton>
-        {status && (
-          <span className={cn("text-sm", status.ok ? "text-emerald-600" : "text-red-600")}>{status.msg}</span>
-        )}
+        {status === "live" && <span className="text-sm text-emerald-600">{successMessage}</span>}
+        {status === "error" && <span className="text-sm text-red-600">{err ?? "Submit failed"}</span>}
       </div>
     </form>
   );

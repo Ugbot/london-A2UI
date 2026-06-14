@@ -9,7 +9,9 @@
  */
 import type * as Y from "yjs";
 import { getActiveDoc } from "./doc-registry";
-import { commandSchema, type Command } from "./commands";
+import { commandSchema, WORKER_COMMANDS, type Command } from "./commands";
+import { getActivePool } from "./pool";
+import { runDataCommand } from "./data-engine";
 import {
   ORIGIN,
   type Origin,
@@ -107,6 +109,15 @@ export function applyCommand(
       writeTree(doc, duplicateById(tree, command.id), origin);
       return ok;
     }
+
+    case "data/fetch":
+    case "data/poll-start":
+    case "data/poll-stop":
+    case "form/submit":
+      // Worker-bound commands run in-process here (used by dispatchBatch + tests);
+      // the live dispatch() path prefers the worker pool (see below).
+      void runDataCommand(doc, command);
+      return ok;
   }
 }
 
@@ -118,6 +129,13 @@ export function dispatch(command: unknown, origin: Origin = ORIGIN.local): Dispa
   }
   const doc = getActiveDoc();
   if (!doc) return fail("no active document");
+  // Worker-bound commands go to the pool (the heavy thread); fall back to in-process.
+  if (WORKER_COMMANDS.has(parsed.data.type)) {
+    const pool = getActivePool();
+    if (pool) pool.enqueue(parsed.data);
+    else void runDataCommand(doc, parsed.data);
+    return ok;
+  }
   return applyCommand(doc, parsed.data, origin);
 }
 
