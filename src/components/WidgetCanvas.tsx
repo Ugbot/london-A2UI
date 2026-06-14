@@ -17,6 +17,7 @@ import { RenderedView } from "@/components/RenderedView";
 import { useViewStore } from "@/state/viewStore";
 import { ModeHud } from "@/components/ModeHud";
 import { Inspector } from "@/components/Inspector";
+import { DesignerOverlay } from "@/components/canvas/DesignerOverlay";
 import { findById } from "@/bricks/tree";
 import { primaryTextProps } from "@/bricks/text-props";
 import { useStyleLayers } from "@/style/StyleLayers";
@@ -62,6 +63,7 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
 
   const selectedNode = selectedId ? findById(tree, selectedId) : null;
   const prevKey = useRef<string>("");
+  const surfaceRef = useRef<HTMLDivElement>(null);
   const [flash, setFlash] = useState(false);
 
   // Schematic is the WYSIWYG editor: clicking selects (no tool needed). We select on
@@ -181,13 +183,12 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
                   onClose={clear}
                 />
               )}
-              {/* Highlight the selected element (temporary; the DesignerOverlay
-                  replaces this with hover/selection boxes in step 2). */}
-              {selectedId && (
-                <style>{`[data-brick-id="${selectedId}"] { outline: 2px solid var(--accent-brand); outline-offset: 2px; border-radius: var(--radius); }`}</style>
-              )}
+              {/* Designer chrome: hover/selection boxes, label, handles, quick actions
+                  (rect-measured, schematic-only — never in the rendered iframe). */}
+              <DesignerOverlay tree={tree} surfaceRef={surfaceRef} />
               {/* The artboard: a white elevated card the widget renders into. */}
               <div
+                ref={surfaceRef}
                 className={cn(
                   "widget-surface mx-auto min-h-[60vh] max-w-5xl rounded-[var(--radius-xl)] bg-[var(--background)] p-6 text-[var(--foreground)] shadow-[0_8px_40px_rgba(0,0,0,0.10)] ring-1 ring-black/5 transition-shadow duration-300",
                   flash && "ring-2 ring-[var(--accent-brand)]",
