@@ -26,6 +26,7 @@ import { ChatPanel } from "@/components/ChatPanel";
 import { DEFAULT_MODEL_ID } from "@/mastra/models";
 import { WidgetPreviewCard, AskUserCard, FoundryCard } from "@/components/chat-cards";
 import { useMentionStore } from "@/state/mentionStore";
+import { useSelectionStore } from "@/state/selectionStore";
 import { useFoundryStore } from "@/state/foundryStore";
 import { registry } from "@/bricks/registry";
 import {
@@ -123,7 +124,7 @@ export default function WidgetComposerPage() {
     return find(widget) ?? "Untitled report";
   }, [widget]);
   // The element the user clicked-to-target on the canvas (if any).
-  const selectedId = useMentionStore((s) => s.targetId);
+  const selectedId = useSelectionStore((s) => s.selectedId);
 
   // Feed the current widget + element list + current selection to the agent
   // every turn, so a follow-up prompt edits what's on the canvas, resolves
@@ -253,7 +254,7 @@ export default function WidgetComposerPage() {
       JSON.stringify({
         widget: widgetRef.current ?? null,
         elements: indexElements(widgetRef.current),
-        selected: useMentionStore.getState().targetId,
+        selected: useSelectionStore.getState().selectedId,
       }),
   });
 

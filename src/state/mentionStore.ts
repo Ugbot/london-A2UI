@@ -1,10 +1,13 @@
 "use client";
 
 /**
- * Bridges canvas element selection and the chat input for @-targeting.
- * - Clicking an element on the canvas sets `targetId` (highlight) and queues a
- *   `pendingInsert` ("@id ") that the MentionInput appends to its text.
- * - `selectMode` toggles the click-to-target interaction on the canvas.
+ * Chat @-mention plumbing + the canvas interaction MODE (for the tool dock).
+ *
+ * WYSIWYG selection now lives in selectionStore (clicking selects for editing). This
+ * store is only: (1) the tool mode (none/select/move) the dock + ModeHud use for the
+ * drag-to-move tool, and (2) `pendingInsert` — an "@id " queued for the chat composer
+ * (consumed by MentionOverlay). Pushing a mention is now an EXPLICIT action
+ * (`mentionElement`), not a side effect of selecting.
  */
 import { create } from "zustand";
 
@@ -13,25 +16,21 @@ export type EditorMode = "none" | "select" | "move";
 
 interface MentionStore {
   mode: EditorMode;
-  targetId: string | null;
   pendingInsert: string | null;
   setMode: (mode: EditorMode) => void;
-  selectElement: (id: string) => void;
+  /** Queue an "@id " for the chat composer (explicit "mention in chat" action). */
+  mentionElement: (id: string) => void;
   consumeInsert: () => string | null;
-  clearTarget: () => void;
 }
 
 export const useMentionStore = create<MentionStore>((set, get) => ({
   mode: "none",
-  targetId: null,
   pendingInsert: null,
   setMode: (mode) => set({ mode }),
-  // Selecting an element queues an @mention and drops back to the default mode.
-  selectElement: (id) => set({ targetId: id, pendingInsert: `@${id} `, mode: "none" }),
+  mentionElement: (id) => set({ pendingInsert: `@${id} ` }),
   consumeInsert: () => {
     const v = get().pendingInsert;
     if (v) set({ pendingInsert: null });
     return v;
   },
-  clearTarget: () => set({ targetId: null }),
 }));

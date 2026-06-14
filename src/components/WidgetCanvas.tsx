@@ -18,11 +18,20 @@ import { useViewStore } from "@/state/viewStore";
 import { ModeHud } from "@/components/ModeHud";
 import { Inspector } from "@/components/Inspector";
 import { findById } from "@/bricks/tree";
+import { primaryTextProps } from "@/bricks/text-props";
 import { useStyleLayers } from "@/style/StyleLayers";
 import { useMentionStore } from "@/state/mentionStore";
+import { useSelectionStore } from "@/state/selectionStore";
+import { dispatch } from "@/engine/dispatch";
 import { cn } from "@/lib/utils";
 import type { CompositionNode } from "@/bricks/composition";
 import type { RenderStatus } from "@/lib/types";
+
+/** Resolve a click/hover target element to its nearest addressable brick id. */
+function brickIdAt(target: EventTarget | null): string | null {
+  const el = (target as HTMLElement | null)?.closest?.("[data-brick-id]");
+  return el?.getAttribute("data-brick-id") ?? null;
+}
 
 export interface WidgetCanvasProps {
   tree: CompositionNode | null;
@@ -40,38 +49,68 @@ export interface WidgetCanvasProps {
 
 export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report", headerExtra, onMove, onSetSx }: WidgetCanvasProps) {
   const { mergedVars } = useStyleLayers();
-  const mode = useMentionStore((s) => s.mode);
-  const setMode = useMentionStore((s) => s.setMode);
-  const targetId = useMentionStore((s) => s.targetId);
-  const selectElement = useMentionStore((s) => s.selectElement);
-  const clearTarget = useMentionStore((s) => s.clearTarget);
-  const selectMode = mode === "select";
-  const moveMode = mode === "move";
-  const selectedNode = targetId ? findById(tree, targetId) : null;
+  const moveMode = useMentionStore((s) => s.mode === "move");
+  const mentionElement = useMentionStore((s) => s.mentionElement);
+
+  const selectedId = useSelectionStore((s) => s.selectedId);
+  const editingId = useSelectionStore((s) => s.editingId);
+  const select = useSelectionStore((s) => s.select);
+  const enterEdit = useSelectionStore((s) => s.enterEdit);
+  const exitEdit = useSelectionStore((s) => s.exitEdit);
+  const clear = useSelectionStore((s) => s.clear);
+  const setHover = useSelectionStore((s) => s.setHover);
+
+  const selectedNode = selectedId ? findById(tree, selectedId) : null;
   const prevKey = useRef<string>("");
   const [flash, setFlash] = useState(false);
 
-  // Click-to-target in Select mode → queue an @mention + highlight.
+  // Schematic is the WYSIWYG editor: clicking selects (no tool needed). We select on
+  // capture but do NOT stop propagation, so interactive bricks still receive the click.
+  // Double-click enters inline text editing. Move mode (drag tool) suspends selection.
   const onCanvasClick = (e: React.MouseEvent) => {
-    if (!selectMode) return;
-    const el = (e.target as HTMLElement).closest("[data-brick-id]");
-    const id = el?.getAttribute("data-brick-id");
-    if (id) {
+    if (moveMode) return;
+    const id = brickIdAt(e.target);
+    if (id) select(id);
+    else clear(); // click on empty artboard deselects
+  };
+  const onCanvasDoubleClick = (e: React.MouseEvent) => {
+    if (moveMode) return;
+    const id = brickIdAt(e.target);
+    if (!id) return;
+    const node = findById(tree, id);
+    if (node && primaryTextProps(node.brick).length > 0) {
       e.preventDefault();
       e.stopPropagation();
-      selectElement(id);
+      enterEdit(id);
     }
   };
+  const onCanvasOver = (e: React.MouseEvent) => {
+    if (moveMode) return;
+    setHover(brickIdAt(e.target));
+  };
 
-  // Esc exits the current mode.
+  // Keyboard: Esc exits edit then clears; Delete removes the selection — but never
+  // while typing (inline edit, an input/textarea, or the chat composer).
   useEffect(() => {
-    if (mode === "none") return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMode("none");
+      const ae = document.activeElement as HTMLElement | null;
+      const typing =
+        editingId !== null ||
+        (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable));
+      if (e.key === "Escape") {
+        if (editingId) exitEdit();
+        else if (selectedId) clear();
+        return;
+      }
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedId && !typing) {
+        e.preventDefault();
+        dispatch({ type: "tree/remove", id: selectedId });
+        clear();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mode, setMode]);
+  }, [editingId, selectedId, exitEdit, clear]);
 
   // Flag a "just updated" cue whenever the rendered tree actually changes.
   useEffect(() => {
@@ -100,21 +139,23 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
         right={
           <div className="flex items-center gap-1.5">
             <ViewToggle />
-            {targetId && (
+            {selectedId && (
               <span className="flex items-center gap-1 rounded-full bg-[var(--secondary)] px-2 py-0.5 text-xs">
-                <span className="font-mono text-[var(--primary-foreground)]">@{targetId}</span>
-                <button onClick={clearTarget} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">✕</button>
+                <span className="font-mono text-[var(--primary-foreground)]">@{selectedId}</span>
+                <button
+                  onClick={() => mentionElement(selectedId)}
+                  title="Mention this element in chat"
+                  className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                >
+                  @
+                </button>
+                <button onClick={clear} title="Deselect" className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">✕</button>
               </span>
             )}
             {headerExtra}
           </div>
         }
       />
-
-      {/* Highlight the targeted element's rendered root. */}
-      {targetId && (
-        <style>{`[data-brick-id="${targetId}"] > * { outline: 2px solid var(--accent-brand); outline-offset: 2px; border-radius: var(--radius); }`}</style>
-      )}
 
       <div className="flex min-h-0 flex-1">
         {/* Schematic: the editable canvas (select/drag/inspector). */}
@@ -123,10 +164,12 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
             <ToolDock />
             <div
               onClickCapture={onCanvasClick}
+              onDoubleClick={onCanvasDoubleClick}
+              onMouseOver={onCanvasOver}
+              onMouseLeave={() => setHover(null)}
               className={cn(
                 "relative flex-1 overflow-auto p-8 transition-colors",
                 moveMode ? "bg-[var(--accent)]/40" : "",
-                selectMode && "cursor-crosshair",
               )}
               style={{ backgroundColor: moveMode ? undefined : "var(--canvas-backdrop)" }}
             >
@@ -135,8 +178,13 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
                 <Inspector
                   node={selectedNode}
                   onSetSx={(sx) => onSetSx(selectedNode.id!, sx)}
-                  onClose={clearTarget}
+                  onClose={clear}
                 />
+              )}
+              {/* Highlight the selected element (temporary; the DesignerOverlay
+                  replaces this with hover/selection boxes in step 2). */}
+              {selectedId && (
+                <style>{`[data-brick-id="${selectedId}"] { outline: 2px solid var(--accent-brand); outline-offset: 2px; border-radius: var(--radius); }`}</style>
               )}
               {/* The artboard: a white elevated card the widget renders into. */}
               <div
