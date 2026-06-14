@@ -1,27 +1,14 @@
 import type { NextConfig } from "next";
-import path from "node:path";
-
-// Force a SINGLE Yjs module instance. yjs ships dual ESM (.mjs) + CJS (.cjs); when
-// some importers get one and some the other, two instances load — the source of the
-// "Yjs was already imported" warning and broken cross-module instanceof checks. Pin
-// every `yjs` resolution (ours + y-websocket + y-protocols) to the one ESM build.
-const YJS_ESM = path.resolve(process.cwd(), "node_modules/yjs/dist/yjs.mjs");
 
 const nextConfig: NextConfig = {
   output: "standalone",
   turbopack: {
     // Pin the workspace root to THIS project (a stray ~/package-lock.json otherwise
-    // makes Next infer the home dir as root, breaking relative resolution + the alias).
+    // makes Next infer the home dir as root). NOTE: do NOT alias `yjs` to a single
+    // file here — that hands y-websocket/y-protocols a different module identity than
+    // the doc and silently breaks the awareness protocol (collab cursors/presence).
+    // The server externalize below is what dedupes the build warning.
     root: process.cwd(),
-    // Relative to `root` above (Turbopack treats a leading-slash path as relative).
-    resolveAlias: {
-      yjs: "./node_modules/yjs/dist/yjs.mjs",
-    },
-  },
-  webpack: (config) => {
-    config.resolve = config.resolve ?? {};
-    config.resolve.alias = { ...(config.resolve.alias ?? {}), yjs: YJS_ESM };
-    return config;
   },
   // DBOS is a Node server framework with lazy optional deps (otel, winston); let
   // Node require it at runtime instead of bundling it (Turbopack can't resolve
