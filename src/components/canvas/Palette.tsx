@@ -7,10 +7,19 @@
  */
 import * as React from "react";
 import { Plus } from "lucide-react";
-import { PALETTE_MIME, paletteGroups } from "@/bricks/palette";
+import { PALETTE_MIME, paletteGroups, type PaletteItem } from "@/bricks/palette";
+import { registry } from "@/bricks/registry";
 
 export function Palette() {
-  const groups = React.useMemo(() => paletteGroups(), []);
+  const groups = React.useMemo(() => {
+    const g = paletteGroups();
+    // Baked composite bricks (Bake to brick) show up under "Saved", draggable like any piece.
+    const baked: PaletteItem[] = [...registry.values()]
+      .filter((b) => b.tags?.includes("baked"))
+      .map((b) => ({ brick: b.name, label: b.name, group: "Saved", defaults: {} }));
+    if (baked.length) g.push({ group: "Saved", items: baked });
+    return g;
+  }, []);
   return (
     <div className="chrome flex w-44 shrink-0 flex-col overflow-auto border-r border-[var(--border)] bg-[var(--background)] py-2 text-[var(--foreground)]">
       <div className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">

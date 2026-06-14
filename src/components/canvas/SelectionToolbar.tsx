@@ -7,12 +7,16 @@
  * dispatch path so actions are transactional + rewindable.
  */
 import * as React from "react";
-import { Pencil, Copy, Trash2, AtSign, GripVertical } from "lucide-react";
+import { Pencil, Copy, Trash2, AtSign, GripVertical, Package } from "lucide-react";
 import { dispatch } from "@/engine/dispatch";
 import { useSelectionStore } from "@/state/selectionStore";
 import { useMentionStore } from "@/state/mentionStore";
 import { primaryTextProps } from "@/bricks/text-props";
+import { findById } from "@/bricks/tree";
 import { ELEMENT_MIME } from "@/bricks/palette";
+import { getActiveDoc } from "@/engine/doc-registry";
+import { readTree } from "@/collab/doc-model";
+import { bakeToBrick, toPascalBrickName } from "@/export/bake";
 
 export function SelectionToolbar({ id, brick, rect }: { id: string; brick: string; rect: DOMRect }) {
   const enterEdit = useSelectionStore((s) => s.enterEdit);
@@ -61,6 +65,23 @@ export function SelectionToolbar({ id, brick, rect }: { id: string; brick: strin
       )}
       <Btn title="Duplicate" onClick={() => dispatch({ type: "tree/duplicate", id })}>
         <Copy size={14} />
+      </Btn>
+      <Btn
+        title="Bake into a reusable brick"
+        onClick={async () => {
+          const doc = getActiveDoc();
+          const node = doc ? findById(readTree(doc), id) : null;
+          if (!node) return;
+          const raw = window.prompt("Bake this into a reusable brick named:", brick);
+          if (!raw) return;
+          try {
+            window.alert(await bakeToBrick(toPascalBrickName(raw), node));
+          } catch (e) {
+            window.alert(`Bake failed: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }}
+      >
+        <Package size={14} />
       </Btn>
       <Btn title="Mention in chat" onClick={() => mentionElement(id)}>
         <AtSign size={14} />

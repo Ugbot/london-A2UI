@@ -11,6 +11,7 @@ import type { CompositionNode } from "@/bricks/composition";
 import { getActiveDoc } from "@/engine/doc-registry";
 import { buildReportBundle, bytesToBase64 } from "@/export/pwa";
 import { collectDocumentCss } from "@/export/collect-css";
+import { bakeToBrick, toPascalBrickName } from "@/export/bake";
 
 const THEME_VARS = [
   "--background", "--foreground", "--card", "--card-foreground", "--primary",
@@ -78,6 +79,18 @@ export function ExportMenu({
 <style>:root{\n${vars}\n}body{background:var(--background);color:var(--foreground);font-family:Inter,system-ui,Arial,sans-serif;padding:24px}</style>
 </head><body>${el.innerHTML}</body></html>`;
     download("site.html", html, "text/html");
+  };
+
+  const bake = async () => {
+    if (!widget) return;
+    const raw = window.prompt("Name this brick — it'll appear in the palette + for the agent:", "MySection");
+    if (!raw) return;
+    try {
+      const msg = await bakeToBrick(toPascalBrickName(raw), widget);
+      window.alert(msg);
+    } catch (e) {
+      window.alert(`Bake failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   const exportPwa = () => {
@@ -156,6 +169,8 @@ export function ExportMenu({
       </button>
       {open && (
         <div className="absolute right-0 z-50 mt-1 flex w-44 flex-col rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] p-1 shadow-md">
+          <Item label="🧱 Bake to brick…" onClick={() => void bake()} />
+          <div className="my-1 border-t border-[var(--border)]" />
           <Item label="Download JSON" onClick={exportJson} />
           <Item label="Import JSON…" onClick={() => fileRef.current?.click()} />
           <div className="my-1 border-t border-[var(--border)]" />

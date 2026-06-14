@@ -38,6 +38,21 @@ interface FoundryBody {
   componentSource?: string;
   /** Whether the brick renders child composition nodes (container templates). */
   acceptsChildren?: boolean;
+  /** COMPOSITE mode: bake a composition tree into a reusable brick (export→import). */
+  tree?: unknown;
+}
+
+/** Synthesize a composite brick (renders a stored composition tree) from `tree`. */
+function compositeSources(tree: unknown): { schemaSource: string; componentSource: string } {
+  return {
+    schemaSource: `import { z } from "zod";\nexport const schema = z.object({});\nexport type Props = z.infer<typeof schema>;\n`,
+    componentSource:
+      `"use client";\n` +
+      `import { Renderer } from "@/components/Renderer";\n` +
+      `import type { CompositionNode } from "@/bricks/composition";\n` +
+      `const TREE = ${JSON.stringify(tree)} as unknown as CompositionNode;\n` +
+      `export function Component() {\n  return <Renderer tree={TREE} />;\n}\n`,
+  };
 }
 
 interface Job {
@@ -149,6 +164,15 @@ export async function POST(req: Request) {
     body = (await req.json()) as FoundryBody;
   } catch {
     return Response.json({ error: "invalid JSON" }, { status: 400 });
+  }
+  // Composite bake: synthesize schema + component from the tree, tag it "baked".
+  if (body.tree !== undefined) {
+    const src = compositeSources(body.tree);
+    body.schemaSource = src.schemaSource;
+    body.componentSource = src.componentSource;
+    body.description ??= `A baked composite of "${body.name}".`;
+    body.tags = Array.from(new Set([...(body.tags ?? []), "baked"]));
+    body.acceptsChildren = false;
   }
   const { name, description, npmPackage, schemaSource, componentSource } = body;
   if (!name || !NAME_RE.test(name)) {
