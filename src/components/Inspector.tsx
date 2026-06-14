@@ -6,11 +6,24 @@
  * transactionally (via the parent's onSetSx → patchById → applyTree → undoable).
  * This is the visual half of the style system (bricks · mortar · styles).
  */
-import { Lock, X } from "lucide-react";
+import * as React from "react";
+import {
+  Lock,
+  X,
+  Bold,
+  Italic,
+  Underline,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Minus,
+  Plus,
+} from "lucide-react";
 import type { CompositionNode } from "@/bricks/composition";
 import { getBrick } from "@/bricks/registry";
 import { zodToJsonSchema } from "@/lib/zod-to-json-schema";
 import { primaryTextProps, isBoundProp } from "@/bricks/text-props";
+import { toggleToken, setExclusiveToken, nextTextSize, ALIGN_TOKENS } from "@/bricks/office-format";
 import { dispatch } from "@/engine/dispatch";
 
 const SKIP_PROPS = new Set(["sx", "style", "bindKey", "bindField", "bindCompute"]);
@@ -162,6 +175,67 @@ function LayoutSection({ node }: { node: CompositionNode }) {
   );
 }
 
+/** Office-suite-style formatting bar — friendly controls that drive `sx`/`style` under
+ *  the hood, so users never see raw CSS terms. */
+function OfficeBar({
+  node,
+  current,
+  onSetSx,
+}: {
+  node: CompositionNode;
+  current: string[];
+  onSetSx: (sx: string[]) => void;
+}) {
+  const has = (t: string) => current.includes(t);
+  const toggle = (t: string) => onSetSx(toggleToken(current, t));
+  const setExclusive = (group: string[], t: string) => onSetSx(setExclusiveToken(current, group, t));
+  const stepSize = (dir: 1 | -1) => onSetSx(nextTextSize(current, dir));
+  const style = (node.props as { style?: React.CSSProperties }).style ?? {};
+  const setColor = (color: string) =>
+    dispatch({ type: "tree/patch", id: node.id!, setProps: { style: { ...style, color } } });
+
+  const Btn = ({ on, onClick, title, children }: { on?: boolean; onClick: () => void; title: string; children: React.ReactNode }) => (
+    <button
+      onClick={onClick}
+      title={title}
+      className={[
+        "grid h-7 w-7 place-items-center rounded-[var(--radius-sm)] border transition-colors",
+        on
+          ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
+          : "border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)]",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+
+  return (
+    <div className="flex flex-col gap-2 border-b border-[var(--border)] pb-3">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">Format</div>
+      <div className="flex flex-wrap items-center gap-1">
+        <Btn on={has("weight-bold")} onClick={() => toggle("weight-bold")} title="Bold"><Bold size={13} /></Btn>
+        <Btn on={has("italic")} onClick={() => toggle("italic")} title="Italic"><Italic size={13} /></Btn>
+        <Btn on={has("underline")} onClick={() => toggle("underline")} title="Underline"><Underline size={13} /></Btn>
+        <span className="mx-0.5 h-5 w-px bg-[var(--border)]" />
+        <Btn onClick={() => stepSize(-1)} title="Smaller text"><Minus size={13} /></Btn>
+        <Btn onClick={() => stepSize(1)} title="Larger text"><Plus size={13} /></Btn>
+        <span className="mx-0.5 h-5 w-px bg-[var(--border)]" />
+        <Btn on={has("left")} onClick={() => setExclusive(ALIGN_TOKENS, "left")} title="Align left"><AlignLeft size={13} /></Btn>
+        <Btn on={has("center")} onClick={() => setExclusive(ALIGN_TOKENS, "center")} title="Align center"><AlignCenter size={13} /></Btn>
+        <Btn on={has("right")} onClick={() => setExclusive(ALIGN_TOKENS, "right")} title="Align right"><AlignRight size={13} /></Btn>
+        <span className="mx-0.5 h-5 w-px bg-[var(--border)]" />
+        <input
+          type="color"
+          value={typeof style.color === "string" ? style.color : "#000000"}
+          onChange={(e) => setColor(e.target.value)}
+          title="Text color"
+          className="h-7 w-7 cursor-pointer rounded-[var(--radius-sm)] border border-[var(--border)] bg-transparent p-0.5"
+        />
+      </div>
+    </div>
+  );
+}
+
 export function Inspector({
   node,
   onSetSx,
@@ -171,6 +245,7 @@ export function Inspector({
   onSetSx: (sx: string[]) => void;
   onClose: () => void;
 }) {
+  const [tab, setTab] = React.useState<"format" | "advanced">("format");
   const current = Array.isArray((node.props as { sx?: unknown })?.sx)
     ? ((node.props as { sx?: string[] }).sx as string[])
     : [];
@@ -188,49 +263,74 @@ export function Inspector({
 
   return (
     <div className="chrome absolute right-4 top-4 z-30 flex max-h-[calc(100%-2rem)] w-60 flex-col overflow-auto rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] shadow-2xl">
-      <div className="sticky top-0 flex items-center justify-between border-b border-[var(--border)] bg-[var(--background)] px-3 py-2">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] bg-[var(--background)] px-3 py-2">
         <div className="min-w-0">
-          <div className="text-xs font-semibold">Style</div>
+          <div className="text-xs font-semibold">Inspect</div>
           <div className="truncate font-mono text-[10px] text-[var(--muted-foreground)]">@{node.id} · {node.brick}</div>
         </div>
         <button onClick={onClose} className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)]">
           <X size={14} />
         </button>
       </div>
-      <div className="flex flex-col gap-3 p-3">
-        {(() => {
-          const props = stringProps(node);
-          return props.length > 0 ? (
-            <div className="flex flex-col gap-2 border-b border-[var(--border)] pb-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">Content</div>
-              {props.map((p) => (
-                <ContentField key={p} node={node} prop={p} />
-              ))}
-            </div>
-          ) : null;
-        })()}
-        <LayoutSection node={node} />
-        {GROUPS.map((g) => (
-          <div key={g.label} className="flex flex-col gap-1.5">
-            <div className="text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">{g.label}</div>
-            <div className="flex flex-wrap gap-1">
-              {g.tokens.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => toggle(t, g)}
-                  className={[
-                    "rounded-[var(--radius-sm)] border px-2 py-0.5 text-[11px] transition-colors",
-                    has(t)
-                      ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
-                      : "border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)]",
-                  ].join(" ")}
-                >
-                  {SHORT[t] ?? t}
-                </button>
-              ))}
-            </div>
-          </div>
+
+      {/* Format (friendly, default) vs Advanced (raw style tokens) */}
+      <div className="flex gap-1 border-b border-[var(--border)] px-3 py-1.5">
+        {(["format", "advanced"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={[
+              "rounded-[var(--radius-sm)] px-2 py-0.5 text-[11px] font-medium capitalize transition-colors",
+              tab === t
+                ? "bg-[var(--secondary)] text-[var(--foreground)]"
+                : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
+            ].join(" ")}
+          >
+            {t}
+          </button>
         ))}
+      </div>
+
+      <div className="flex flex-col gap-3 p-3">
+        {tab === "format" ? (
+          <>
+            <OfficeBar node={node} current={current} onSetSx={onSetSx} />
+            {(() => {
+              const props = stringProps(node);
+              return props.length > 0 ? (
+                <div className="flex flex-col gap-2 border-b border-[var(--border)] pb-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">Content</div>
+                  {props.map((p) => (
+                    <ContentField key={p} node={node} prop={p} />
+                  ))}
+                </div>
+              ) : null;
+            })()}
+            <LayoutSection node={node} />
+          </>
+        ) : (
+          GROUPS.map((g) => (
+            <div key={g.label} className="flex flex-col gap-1.5">
+              <div className="text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">{g.label}</div>
+              <div className="flex flex-wrap gap-1">
+                {g.tokens.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => toggle(t, g)}
+                    className={[
+                      "rounded-[var(--radius-sm)] border px-2 py-0.5 text-[11px] transition-colors",
+                      has(t)
+                        ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
+                        : "border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)]",
+                    ].join(" ")}
+                  >
+                    {SHORT[t] ?? t}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

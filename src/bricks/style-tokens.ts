@@ -44,6 +44,7 @@ export const STYLE_TOKENS: Record<string, string> = {
   "weight-semibold": "font-semibold",
   "weight-bold": "font-bold",
   italic: "italic",
+  underline: "underline",
   uppercase: "uppercase tracking-wide",
   muted: "text-[var(--muted-foreground)]",
   // Alignment / width
