@@ -56,3 +56,4 @@ __pycache__
 # DB dumps: the full backup carries connection SECRETS — never commit it.
 /db/widgetcache.sql
 /db/*.dump
+/db/archive.json

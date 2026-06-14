@@ -11,7 +11,22 @@ The app keeps its state in a `widgetcache` Postgres (pgvector) DB:
 | `chats` | chat transcripts per project | no |
 | `connections` | data-source configs — **contains SECRETS** | no |
 
-## Dump
+## Portable archive (recommended — works anywhere, any Postgres version)
+
+A single JSON file with EVERY table, via the pg protocol (no `pg_dump`, no container, no
+client-version match needed):
+
+```bash
+npm run db:export                 # → db/archive.json  (ALL tables, incl. secrets → gitignored)
+npm run db:import [db/archive.json]
+```
+
+Import is **idempotent** (upserts on each table's primary key) and schema-driven (jsonb /
+vector / text[] columns round-trip correctly). To rebuild elsewhere: bring up the infra,
+then `npm run db:import path/to/archive.json` (it runs the migration first, so the tables
++ pgvector are created automatically). This is the most portable option.
+
+## Dump (faithful pg_dump SQL)
 
 ```bash
 npm run db:dump            # FULL backup → db/widgetcache.sql  (has secrets → gitignored)
