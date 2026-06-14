@@ -498,11 +498,14 @@ export default function WidgetComposerPage() {
                       ↷
                     </button>
                   </div>
+                  <span className="h-5 w-px bg-[var(--border)]" />
                   <ReportsMenu currentSession={session} onOpen={setSession} />
                   <DataPanel />
+                  <span className="h-5 w-px bg-[var(--border)]" />
                   <ModelMenu value={modelId} onChange={setModelId} />
                   <ExportMenu widget={widget} onImport={(t) => applyTree(t)} />
                   <StyleMenu />
+                  <span className="h-5 w-px bg-[var(--border)]" />
                   <CollabControls />
                 </div>
               }
