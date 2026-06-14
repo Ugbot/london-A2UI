@@ -21,6 +21,19 @@ export interface Hole {
 }
 
 /**
+ * A brick's strongly-typed API contract with any caller in the front end it is built
+ * into (a parent brick, a sibling, the host app, or the agent). It declares, as Zod
+ * schemas, the COMMANDS the brick accepts, the EVENTS it emits, and its exposed STATE.
+ * Stored erased on BrickDef; full inference is preserved at the authoring site via
+ * `defineContract` (see contract.ts), which a brick imports to type its own wiring.
+ */
+export interface BrickContract {
+  commands: Record<string, z.ZodTypeAny>;
+  events: Record<string, z.ZodTypeAny>;
+  state?: z.ZodTypeAny;
+}
+
+/**
  * A registered brick. Stored type-erased so heterogeneous bricks share one
  * registry; authoring keeps full type-safety via {@link defineBrick}.
  */
@@ -41,6 +54,8 @@ export interface BrickDef {
    * authoring site, so the erasure never reaches brick authors.
    */
   Component: ComponentType<Record<string, unknown> & { children?: ReactNode }>;
+  /** Optional typed command/event/state contract for cross-component control. */
+  contract?: BrickContract;
 }
 
 /**
@@ -56,6 +71,8 @@ export function defineBrick<S extends z.ZodTypeAny>(def: {
   schema: S;
   acceptsChildren?: boolean;
   Component: ComponentType<z.infer<S> & { children?: ReactNode }>;
+  /** Optional typed contract (commands/events/state) — see `defineContract`. */
+  contract?: BrickContract;
 }): BrickDef {
   return {
     name: def.name,
@@ -64,5 +81,6 @@ export function defineBrick<S extends z.ZodTypeAny>(def: {
     schema: def.schema,
     acceptsChildren: def.acceptsChildren ?? false,
     Component: def.Component as BrickDef["Component"],
+    contract: def.contract,
   };
 }

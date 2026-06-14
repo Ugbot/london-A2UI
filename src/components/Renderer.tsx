@@ -18,6 +18,7 @@ import {
   type CompositionNode,
 } from "@/bricks/composition";
 import { resolveSx } from "@/bricks/style-tokens";
+import { BrickIdContext } from "@/bricks/contract-hooks";
 import { cn } from "@/lib/utils";
 import type { RenderStatus } from "@/lib/types";
 
@@ -62,16 +63,24 @@ function NodeRenderer({ node }: { node: CompositionNode }): React.ReactElement {
       <Component {...props} />
     );
 
+  // Provide the node id to the brick so contracted bricks self-identify (commands/
+  // events are addressed by this id) without leaking it into their typed props.
+  const inner = node.id ? (
+    <BrickIdContext.Provider value={node.id}>{rendered}</BrickIdContext.Provider>
+  ) : (
+    rendered
+  );
+
   const sxClass = resolveSx(sx);
   // Wrap when the node is addressable (@-target) or carries styles.
   if (node.id || sxClass || style) {
     return (
       <NodeWrapper id={node.id} sxClass={sxClass} style={style}>
-        {rendered}
+        {inner}
       </NodeWrapper>
     );
   }
-  return rendered;
+  return inner;
 }
 
 /**

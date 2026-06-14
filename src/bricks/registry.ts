@@ -36,6 +36,28 @@ export function getBrick(name: string): BrickDef | undefined {
   return registry.get(name);
 }
 
+/** A brick's typed command/event/state contract, if it exposes one. */
+export function getContract(name: string) {
+  return registry.get(name)?.contract;
+}
+
+/** JSON-schema summary of a contract (for the agent's list_bricks / describe_contract). */
+export function contractSummary(brick: BrickDef): {
+  commands: Record<string, unknown>;
+  events: Record<string, unknown>;
+  state?: unknown;
+} | undefined {
+  const c = brick.contract;
+  if (!c) return undefined;
+  const map = (rec: Record<string, import("zod").ZodTypeAny>) =>
+    Object.fromEntries(Object.entries(rec).map(([k, v]) => [k, zodToJsonSchema(v)]));
+  return {
+    commands: map(c.commands),
+    events: map(c.events),
+    ...(c.state ? { state: zodToJsonSchema(c.state) } : {}),
+  };
+}
+
 /** All registered brick names. */
 export function brickNames(): string[] {
   return [...registry.keys()];
@@ -49,16 +71,20 @@ export interface BrickCatalogEntry {
   acceptsChildren: boolean;
   /** JSON-schema view of the props, for the agent and for embedding context. */
   props: Record<string, unknown>;
+  /** Typed command/event/state contract summary, when the brick exposes one. */
+  contract?: { commands: Record<string, unknown>; events: Record<string, unknown>; state?: unknown };
 }
 
 /** Build the catalog view of a single brick. */
 export function toCatalogEntry(brick: BrickDef): BrickCatalogEntry {
+  const contract = contractSummary(brick);
   return {
     name: brick.name,
     description: brick.description,
     tags: brick.tags,
     acceptsChildren: brick.acceptsChildren,
     props: zodToJsonSchema(brick.schema),
+    ...(contract ? { contract } : {}),
   };
 }
 

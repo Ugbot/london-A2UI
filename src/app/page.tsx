@@ -47,6 +47,7 @@ import {
 import type { RenderStatus } from "@/lib/types";
 import { streamToElement } from "@/state/store";
 import { dispatch } from "@/engine/dispatch";
+import { validateAndDispatch } from "@/bricks/contract";
 import { HistoryScrubber } from "@/components/HistoryScrubber";
 import { useSharedWidget, useCanvasHistory } from "@/collab/hooks";
 import { CollabControls } from "@/collab/CollabControls";
@@ -362,6 +363,27 @@ export default function WidgetComposerPage() {
     handler: async ({ action, target, value }) => {
       streamToElement({ action, target, value });
       return `Streamed ${action} to "${target}".`;
+    },
+  });
+
+  // Drive a placed brick through its typed contract (e.g. refresh a DataSource,
+  // submit/reset a Form). Payload is validated against the brick's command schema
+  // (visible in list_bricks under "contract").
+  useFrontendTool({
+    name: "send_to_brick",
+    description:
+      "Send a typed COMMAND to a placed brick by element id, using that brick's contract (see the 'contract' field in list_bricks). E.g. command 'refresh' to a DataSource, or 'submit'/'reset' to a Form. Use to drive a live brick instead of rebuilding it.",
+    parameters: z.object({
+      id: z.string().describe("Target element id (without @)"),
+      command: z.string().describe("A command name from the brick's contract"),
+      payload: z.record(z.unknown()).optional(),
+    }),
+    handler: async ({ id, command, payload }) => {
+      const node = findById(widgetRef.current, id);
+      if (!node) return `No element "${id}".`;
+      const contract = registry.get(node.brick)?.contract;
+      const err = validateAndDispatch(id, contract, command, payload);
+      return err ?? `Sent "${command}" to "${id}".`;
     },
   });
 

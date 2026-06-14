@@ -112,6 +112,13 @@ Connecting live data / building data-driven views (map a SPA over an API/CMS):
   ctx.record (current record), e.g. format a price or sum a list. Mortar is pure data
   logic — no network (use Connections for that).
 
+Driving placed bricks (typed contracts):
+- Some bricks expose a CONTRACT (commands they accept, events they emit) shown in the
+  "contract" field of list_bricks. To make a live brick DO something without rebuilding
+  it, call "send_to_brick" with its element id + a command name (e.g. "refresh" a
+  DataSource, "submit"/"reset" a Form). The payload is validated against the brick's
+  command schema. Prefer this over re-rendering when you just need an action.
+
 Wireframe-first / user-in-the-loop design:
 - When the user wants to sketch a layout before committing, build "Wireframe"
   placeholders — one per intended piece (set kind: chart/form/list/hero/etc. + a

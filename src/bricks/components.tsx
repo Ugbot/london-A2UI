@@ -27,6 +27,8 @@ import { useElementData } from "@/state/hooks";
 import { useWidgetStore } from "@/state/store";
 import { dispatch } from "@/engine/dispatch";
 import { statusKey, errorKey } from "@/engine/data-engine";
+import { useBrickContract } from "./contract-hooks";
+import { dataSourceContract, formContract, actionButtonContract } from "./contracts";
 import { RecordProvider, useRecordField, useRecord } from "@/state/record";
 import { runMortar } from "@/mortar/run";
 import { useCompleteStore } from "@/state/completeStore";
@@ -581,6 +583,17 @@ export function DataSource({ url, targetKey, jsonPath, intervalMs, label }: Data
   // back the live status the engine publishes to `${targetKey}__status`.
   const status = useElementData<string | undefined>(statusKey(targetKey), undefined);
 
+  // Contract: any caller can `refresh` it; it emits `loaded` when fresh data arrives.
+  const { emit } = useBrickContract(undefined, dataSourceContract, {
+    refresh: () =>
+      dispatch({ type: "data/fetch", key: targetKey, source: { mode: "direct", url }, jsonPath }),
+  });
+  const prevStatus = React.useRef<string | undefined>(undefined);
+  React.useEffect(() => {
+    if (status === "live" && prevStatus.current !== "live") emit("loaded", {});
+    prevStatus.current = status;
+  }, [status, emit]);
+
   React.useEffect(() => {
     const source = { mode: "direct" as const, url };
     if (intervalMs && intervalMs > 0) {
@@ -631,10 +644,14 @@ export function Screens({ labels, children }: WithChildren<ScreensProps>) {
 }
 
 export function ActionButton({ label, target, value, variant }: ActionButtonProps) {
+  const { emit } = useBrickContract(undefined, actionButtonContract, {});
   return (
     <UIButton
       variant={variant}
-      onClick={() => dispatch({ type: "data/set", target, value })}
+      onClick={() => {
+        dispatch({ type: "data/set", target, value });
+        emit("clicked", { target, value });
+      }}
     >
       {label}
     </UIButton>
@@ -783,24 +800,48 @@ export function Form(props: WithChildren<FormProps>) {
   const err = useElementData<string | undefined>(errorKey(statusTarget), undefined);
   const pending = status === "loading";
 
+  const submit = React.useCallback(() => {
+    dispatch({
+      type: "form/submit",
+      source: {
+        mode: (mode ?? "proxy") as "proxy" | "direct",
+        connectionId,
+        endpointId,
+        url,
+        method,
+      },
+      fieldsPrefix,
+      responseKey,
+      refetchKeys,
+    });
+  }, [mode, connectionId, endpointId, url, method, fieldsPrefix, responseKey, refetchKeys]);
+
+  // Contract: drive submit/reset programmatically; emit `submitted` on outcome.
+  const { emit } = useBrickContract(undefined, formContract, {
+    submit,
+    reset: () => {
+      const data = useWidgetStore.getState().data;
+      for (const key of Object.keys(data)) {
+        if (key.startsWith(fieldsPrefix)) {
+          useWidgetStore.getState().apply({ action: "remove", target: key });
+        }
+      }
+    },
+  });
+  const prevStatus = React.useRef<string | undefined>(undefined);
+  React.useEffect(() => {
+    if ((status === "live" || status === "error") && status !== prevStatus.current) {
+      emit("submitted", { ok: status === "live" });
+    }
+    prevStatus.current = status;
+  }, [status, emit]);
+
   return (
     <form
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
-        dispatch({
-          type: "form/submit",
-          source: {
-            mode: (mode ?? "proxy") as "proxy" | "direct",
-            connectionId,
-            endpointId,
-            url,
-            method,
-          },
-          fieldsPrefix,
-          responseKey,
-          refetchKeys,
-        });
+        submit();
       }}
     >
       {children}

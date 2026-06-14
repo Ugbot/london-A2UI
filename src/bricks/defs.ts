@@ -13,6 +13,7 @@ import { Map as MapBrick } from "./map-components";
 import { EXTRA_BRICKS } from "./extra";
 import { GENERATED_BRICKS } from "./generated";
 import * as S from "./schemas";
+import { dataSourceContract, formContract, actionButtonContract } from "./contracts";
 
 export const BRICKS: BrickDef[] = [
   // --- Layout ---
@@ -251,6 +252,7 @@ export const BRICKS: BrickDef[] = [
     tags: ["data", "live", "fetch", "api", "polling", "state", "stream", "source"],
     schema: S.dataSourceSchema,
     Component: C.DataSource,
+    contract: dataSourceContract,
   }),
   defineBrick({
     name: "ApiData",
@@ -274,6 +276,7 @@ export const BRICKS: BrickDef[] = [
     schema: S.formSchema,
     acceptsChildren: true,
     Component: C.Form,
+    contract: formContract,
   }),
   defineBrick({
     name: "Wireframe",
@@ -296,6 +299,7 @@ export const BRICKS: BrickDef[] = [
     tags: ["action", "button", "interactive", "state", "trigger", "event", "message"],
     schema: S.actionButtonSchema,
     Component: C.ActionButton,
+    contract: actionButtonContract,
   }),
 
   // --- Collaborative / live ---
