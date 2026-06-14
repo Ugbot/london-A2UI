@@ -69,14 +69,16 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
   // Schematic is the WYSIWYG editor: clicking selects (no tool needed). We select on
   // capture but do NOT stop propagation, so interactive bricks still receive the click.
   // Double-click enters inline text editing. Move mode (drag tool) suspends selection.
+  const inEditor = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.('[contenteditable="true"]');
+
   const onCanvasClick = (e: React.MouseEvent) => {
-    if (moveMode) return;
+    if (moveMode || inEditor(e.target)) return; // don't disturb an active inline edit
     const id = brickIdAt(e.target);
     if (id) select(id);
     else clear(); // click on empty artboard deselects
   };
   const onCanvasDoubleClick = (e: React.MouseEvent) => {
-    if (moveMode) return;
+    if (moveMode || inEditor(e.target)) return;
     const id = brickIdAt(e.target);
     if (!id) return;
     const node = findById(tree, id);
@@ -104,7 +106,11 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
         else if (selectedId) clear();
         return;
       }
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedId && !typing) {
+      if (typing) return;
+      if (e.key === "Enter" && selectedId) {
+        e.preventDefault();
+        enterEdit(selectedId); // EditableText ignores it for non-text bricks
+      } else if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
         e.preventDefault();
         dispatch({ type: "tree/remove", id: selectedId });
         clear();
@@ -112,7 +118,7 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editingId, selectedId, exitEdit, clear]);
+  }, [editingId, selectedId, enterEdit, exitEdit, clear]);
 
   // Flag a "just updated" cue whenever the rendered tree actually changes.
   useEffect(() => {

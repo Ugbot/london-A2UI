@@ -29,6 +29,7 @@ import { dispatch } from "@/engine/dispatch";
 import { statusKey, errorKey } from "@/engine/data-engine";
 import { useBrickContract } from "./contract-hooks";
 import { dataSourceContract, formContract, actionButtonContract } from "./contracts";
+import { EditableText } from "@/components/canvas/EditableText";
 import { RecordProvider, useRecordField, useRecord } from "@/state/record";
 import { runMortar } from "@/mortar/run";
 import { useCompleteStore } from "@/state/completeStore";
@@ -119,8 +120,8 @@ export function Section({ title, description, children }: WithChildren<SectionPr
     <section className="flex flex-col gap-3">
       {(title || description) && (
         <header className="flex flex-col gap-1">
-          {title && <h2 className="text-xl font-semibold tracking-tight">{title}</h2>}
-          {description && <p className="text-sm text-[var(--muted-foreground)]">{description}</p>}
+          {title && <h2 className="text-xl font-semibold tracking-tight"><EditableText prop="title" value={title} /></h2>}
+          {description && <p className="text-sm text-[var(--muted-foreground)]"><EditableText prop="description" value={description} /></p>}
         </header>
       )}
       {children}
@@ -133,8 +134,8 @@ export function Card({ title, description, footer, children }: WithChildren<Card
     <UICard>
       {(title || description) && (
         <CardHeader>
-          {title && <CardTitle>{title}</CardTitle>}
-          {description && <CardDescription>{description}</CardDescription>}
+          {title && <CardTitle><EditableText prop="title" value={title} /></CardTitle>}
+          {description && <CardDescription><EditableText prop="description" value={description} /></CardDescription>}
         </CardHeader>
       )}
       <CardContent className={cn("flex flex-col gap-3", !title && !description && "pt-6")}>
@@ -185,13 +186,25 @@ export function Heading({ text, level, bindField, bindCompute }: HeadingProps) {
   const shown = bound !== undefined ? String(bound) : text;
   const Tag = (["h1", "h2", "h3", "h4"][level - 1] ?? "h2") as keyof React.JSX.IntrinsicElements;
   const size = ["text-3xl", "text-2xl", "text-xl", "text-lg"][level - 1] ?? "text-2xl";
-  return <Tag className={cn("font-semibold tracking-tight", size)}>{shown}</Tag>;
+  return (
+    <Tag className={cn("font-semibold tracking-tight", size)}>
+      <EditableText prop="text" value={shown} bound={bindField !== undefined || bindCompute !== undefined} />
+    </Tag>
+  );
 }
 
 export function Text({ text, muted, bindKey, bindField, bindCompute }: TextProps) {
   const bound = useBoundValue(bindKey, bindField, bindCompute);
   const shown = bound !== undefined ? String(bound) : text;
-  return <p className={cn("text-sm leading-relaxed", muted && "text-[var(--muted-foreground)]")}>{shown}</p>;
+  return (
+    <p className={cn("text-sm leading-relaxed", muted && "text-[var(--muted-foreground)]")}>
+      <EditableText
+        prop="text"
+        value={shown}
+        bound={bindKey !== undefined || bindField !== undefined || bindCompute !== undefined}
+      />
+    </p>
+  );
 }
 
 export function Badge({ text, variant, bindField }: BadgeProps) {
@@ -218,8 +231,16 @@ export function StatCard({ label, value, delta, trend, bindKey, bindField, bindC
   return (
     <UICard>
       <CardContent className="flex flex-col gap-1 p-5">
-        <span className="text-sm text-[var(--muted-foreground)]">{label}</span>
-        <span className="text-2xl font-semibold tracking-tight tabular-nums">{shownValue}</span>
+        <span className="text-sm text-[var(--muted-foreground)]">
+          <EditableText prop="label" value={label} />
+        </span>
+        <span className="text-2xl font-semibold tracking-tight tabular-nums">
+          <EditableText
+            prop="value"
+            value={shownValue}
+            bound={bindKey !== undefined || bindField !== undefined || bindCompute !== undefined}
+          />
+        </span>
         {delta && <span className={cn("text-xs font-medium", trendColor)}>{arrow} {delta}</span>}
       </CardContent>
     </UICard>
@@ -918,7 +939,7 @@ export function Stepper({ steps, current }: StepperProps) {
 }
 
 export function Button({ label, variant, size }: ButtonBrickProps) {
-  return <UIButton variant={variant} size={size}>{label}</UIButton>;
+  return <UIButton variant={variant} size={size}><EditableText prop="label" value={label} /></UIButton>;
 }
 
 // --- Feedback ---
