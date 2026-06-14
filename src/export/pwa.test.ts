@@ -29,11 +29,15 @@ describe("export PWA bundle", () => {
       title: "Q-Report",
       bodyHtml: "<h1>Quarterly</h1>",
       themeCss: "  --background: #fff;",
+      css: ".bg-\\[var\\(--muted\\)\\]{background:var(--muted)}",
       tree,
       stateUpdateB64,
     });
 
     expect(html).toContain("<title>Q-Report</title>");
+    // Real compiled CSS is inlined; NO Tailwind CDN (so it's styled offline).
+    expect(html).toContain("background:var(--muted)");
+    expect(html).not.toContain("cdn.tailwindcss.com");
     expect(html).toContain('rel="manifest"');
     expect(html).toContain('name="theme-color"');
     expect(html).toContain('id="a2ui-tree"');

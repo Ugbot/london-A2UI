@@ -18,6 +18,8 @@ export interface ReportBundleInput {
   bodyHtml: string;
   /** CSS custom-property declarations (the `--x: y;` lines, no selector). */
   themeCss: string;
+  /** The app's REAL compiled CSS (Tailwind output + globals) so it's styled offline. */
+  css?: string;
   /** The composition tree (re-importable / hydratable). */
   tree: CompositionNode | null;
   /** base64 of Y.encodeStateAsUpdate(doc) — the full doc state (tree + read-model). */
@@ -101,7 +103,7 @@ export function buildReportBundle(input: ReportBundleInput): string {
 <title>${input.title}</title>
 <meta name="theme-color" content="#6366f1">
 <link rel="manifest" href="${manifestUri}">
-<script src="https://cdn.tailwindcss.com"></script>
+<style>${input.css ?? ""}</style>
 <style>:root{
 ${input.themeCss}
 }

@@ -10,6 +10,7 @@ import * as Y from "yjs";
 import type { CompositionNode } from "@/bricks/composition";
 import { getActiveDoc } from "@/engine/doc-registry";
 import { buildReportBundle, bytesToBase64 } from "@/export/pwa";
+import { collectDocumentCss } from "@/export/collect-css";
 
 const THEME_VARS = [
   "--background", "--foreground", "--card", "--card-foreground", "--primary",
@@ -69,12 +70,14 @@ export function ExportMenu({
     if (!el) return;
     const cs = getComputedStyle(document.documentElement);
     const vars = THEME_VARS.map((v) => `      ${v}: ${cs.getPropertyValue(v).trim()};`).join("\n");
+    // Inline the app's REAL compiled CSS so it's fully styled offline (no CDN).
+    const css = collectDocumentCss();
     const html = `<!doctype html>
 <html><head><meta charset="utf-8"><title>Report</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<style>:root{\n${vars}\n}body{background:var(--background);color:var(--foreground);font-family:Arial,sans-serif;padding:24px}</style>
+<style>${css}</style>
+<style>:root{\n${vars}\n}body{background:var(--background);color:var(--foreground);font-family:Inter,system-ui,Arial,sans-serif;padding:24px}</style>
 </head><body>${el.innerHTML}</body></html>`;
-    download("report.html", html, "text/html");
+    download("site.html", html, "text/html");
   };
 
   const exportPwa = () => {
@@ -85,13 +88,14 @@ export function ExportMenu({
     const doc = getActiveDoc();
     const stateUpdateB64 = doc ? bytesToBase64(Y.encodeStateAsUpdate(doc)) : "";
     const html = buildReportBundle({
-      title: "A2UI Report",
+      title: "A2UI Site",
       bodyHtml: el.innerHTML,
       themeCss,
+      css: collectDocumentCss(), // REAL compiled CSS → styled offline / installed
       tree: widget,
       stateUpdateB64,
     });
-    download("report.pwa.html", html, "text/html");
+    download("site.html", html, "text/html");
   };
 
   const exportPng = async () => {
@@ -155,8 +159,8 @@ export function ExportMenu({
           <Item label="Download JSON" onClick={exportJson} />
           <Item label="Import JSON…" onClick={() => fileRef.current?.click()} />
           <div className="my-1 border-t border-[var(--border)]" />
-          <Item label="Standalone HTML" onClick={exportHtml} />
-          <Item label="PWA report (offline)" onClick={exportPwa} />
+          <Item label="Standalone site (HTML)" onClick={exportHtml} />
+          <Item label="Runnable site (offline PWA)" onClick={exportPwa} />
           <Item label="React (.tsx)" onClick={exportReact} />
           <Item label="PNG image" onClick={() => void exportPng()} />
           <Item label="PDF" onClick={() => void exportPdf()} />
