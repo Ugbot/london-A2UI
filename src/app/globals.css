@@ -26,8 +26,45 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  --font-body: Arial, Helvetica, sans-serif;
-  --font-code: "SFMono-Regular", Menlo, monospace;
+  /* The signature accent (indigo), shared by chrome + focus rings. */
+  --accent-brand: #6366f1;
+  --accent-brand-hover: #818cf8;
+
+  /* Neutral backdrop BEHIND the artboard, so the white canvas floats. */
+  --canvas-backdrop: oklch(0.97 0 0);
+
+  --font-body: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --font-code: "SFMono-Regular", ui-monospace, Menlo, monospace;
+}
+
+/*
+ * Dark "chrome" theme — applied ONLY to the builder shell (toolbar, side panels,
+ * dropdowns, chat sidebar) by wrapping those regions in `.chrome`. It locally
+ * REMAPS the same palette vars every component already uses (var(--card),
+ * var(--border), …) to dark surfaces + an indigo accent, so the whole shell goes
+ * dark with almost no per-component class changes. The light artboard is NOT
+ * wrapped in `.chrome`, so bricks keep the light tokens (never light-on-white).
+ */
+.chrome {
+  --background: oklch(0.21 0.012 264);
+  --foreground: oklch(0.96 0.003 264);
+  --card: oklch(0.255 0.014 264);
+  --card-foreground: oklch(0.96 0.003 264);
+  --elevated: oklch(0.29 0.016 264);
+  --primary: var(--accent-brand);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.31 0.016 264);
+  --secondary-foreground: oklch(0.96 0.003 264);
+  --muted: oklch(0.29 0.014 264);
+  --muted-foreground: oklch(0.7 0.02 264);
+  --accent: oklch(0.31 0.016 264);
+  --accent-foreground: oklch(0.96 0.003 264);
+  --border: oklch(0.33 0.016 264);
+  --input: oklch(0.36 0.018 264);
+  --ring: var(--accent-brand);
+  color-scheme: dark;
+  background: var(--background);
+  color: var(--foreground);
 }
 
 /*
@@ -49,7 +86,7 @@ body > [role="presentation"] {
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
 }
 
 body,

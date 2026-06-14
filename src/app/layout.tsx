@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 
 import { CopilotKit } from "@copilotkit/react-core/v2";
 import { CollabProvider } from "@/collab/provider";
@@ -7,9 +8,11 @@ import { QueryProvider } from "@/state/QueryProvider";
 import "./globals.css";
 import "@copilotkit/react-core/v2/styles.css";
 
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+
 export const metadata: Metadata = {
-  title: "Widget Composer",
-  description: "Collaborative agent-driven UI assembled from bricks",
+  title: "A2UI — AI front-end builder",
+  description: "Design data-driven SPAs, dashboards & reports from typed bricks",
 };
 
 export default function RootLayout({
@@ -18,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <head>
         {/*
           @ag-ui/client calls `this.fetch(url, init)` where this.fetch is the
