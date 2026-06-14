@@ -73,7 +73,9 @@ const GROUPS: Group[] = [
   { label: "Text size", exclusive: true, tokens: ["text-sm", "text-base", "text-lg", "text-xl", "text-2xl"] },
   { label: "Weight", exclusive: true, tokens: ["weight-medium", "weight-semibold", "weight-bold"] },
   { label: "Align", exclusive: true, tokens: ["left", "center", "right"] },
-  { label: "More", exclusive: false, tokens: ["border", "italic", "uppercase", "muted", "w-full", "mx-auto"] },
+  { label: "Width", exclusive: true, tokens: ["w-fit", "w-full"] },
+  { label: "Self align", exclusive: true, tokens: ["self-start", "self-center", "self-end", "self-stretch"] },
+  { label: "More", exclusive: false, tokens: ["border", "italic", "uppercase", "muted", "grow", "mx-auto"] },
 ];
 
 // Short chip labels (the token without its group prefix).
@@ -84,7 +86,81 @@ const SHORT: Record<string, string> = {
   "shadow-sm": "sm", shadow: "md", "shadow-lg": "lg",
   "text-sm": "sm", "text-base": "base", "text-lg": "lg", "text-xl": "xl", "text-2xl": "2xl",
   "weight-medium": "medium", "weight-semibold": "semibold", "weight-bold": "bold",
+  "w-fit": "hug", "w-full": "fill",
+  "self-start": "start", "self-center": "center", "self-end": "end", "self-stretch": "stretch",
 };
+
+// Auto-layout props (real flex/grid CSS) edited directly on container bricks.
+const LAYOUT_PROPS = ["direction", "justify", "align", "gap", "cols"];
+
+/** Auto-Layout section: surfaces a container brick's flex/grid props as controls. */
+function LayoutSection({ node }: { node: CompositionNode }) {
+  const def = getBrick(node.brick);
+  const json = def
+    ? (zodToJsonSchema(def.schema) as { properties?: Record<string, { type?: string; enum?: string[] }> })
+    : {};
+  const properties = json.properties ?? {};
+  const present = LAYOUT_PROPS.filter((p) => properties[p]);
+  if (present.length === 0) return null;
+  const set = (prop: string, value: unknown) =>
+    dispatch({ type: "tree/patch", id: node.id!, setProps: { [prop]: value } });
+  const cur = node.props as Record<string, unknown>;
+
+  return (
+    <div className="flex flex-col gap-2 border-b border-[var(--border)] pb-3">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">Auto layout</div>
+      {present.map((prop) => {
+        const spec = properties[prop];
+        if (spec?.enum) {
+          return (
+            <div key={prop} className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">{prop}</span>
+              <div className="flex flex-wrap gap-1">
+                {spec.enum.map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => set(prop, opt)}
+                    className={[
+                      "rounded-[var(--radius-sm)] border px-2 py-0.5 text-[11px]",
+                      cur[prop] === opt
+                        ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
+                        : "border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)]",
+                    ].join(" ")}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        }
+        // numeric (gap 0-12, cols 1-6)
+        const [min, max] = prop === "cols" ? [1, 6] : [0, 12];
+        const value = Math.max(min, Math.min(max, Number(cur[prop]) || 0));
+        return (
+          <div key={prop} className="flex items-center justify-between gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">{prop}</span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => set(prop, Math.max(min, value - 1))}
+                className="grid h-6 w-6 place-items-center rounded border border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)]"
+              >
+                −
+              </button>
+              <span className="w-6 text-center text-xs tabular-nums">{value}</span>
+              <button
+                onClick={() => set(prop, Math.min(max, value + 1))}
+                className="grid h-6 w-6 place-items-center rounded border border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)]"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function Inspector({
   node,
@@ -133,6 +209,7 @@ export function Inspector({
             </div>
           ) : null;
         })()}
+        <LayoutSection node={node} />
         {GROUPS.map((g) => (
           <div key={g.label} className="flex flex-col gap-1.5">
             <div className="text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">{g.label}</div>

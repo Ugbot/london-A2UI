@@ -52,7 +52,14 @@ export const STYLE_TOKENS: Record<string, string> = {
   right: "text-right",
   "w-full": "w-full",
   "w-fit": "w-fit",
+  "h-full": "h-full",
   "mx-auto": "mx-auto",
+  // Flex-child layout (auto-layout sizing within a parent)
+  grow: "grow",
+  "self-start": "self-start",
+  "self-center": "self-center",
+  "self-end": "self-end",
+  "self-stretch": "self-stretch",
 };
 
 /** The set of valid token names (for the inspector + agent docs). */

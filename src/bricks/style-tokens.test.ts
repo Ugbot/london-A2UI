@@ -24,4 +24,8 @@ describe("resolveSx (style tokens → classes)", () => {
       expect(resolveSx([token])).toBeTruthy();
     }
   });
+
+  it("auto-layout child tokens resolve to flex utilities", () => {
+    expect(resolveSx(["w-fit", "self-center", "grow"])).toBe("w-fit self-center grow");
+  });
 });
