@@ -5,7 +5,6 @@ import {
   useHumanInTheLoop,
   useAgentContext,
   CopilotChatConfigurationProvider,
-  CopilotSidebar,
 } from "@copilotkit/react-core/v2";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -23,6 +22,7 @@ import { ReportsMenu } from "@/components/ReportsMenu";
 import { DataPanel } from "@/components/DataPanel";
 import { ChatPersistence } from "@/components/ChatPersistence";
 import { CompleteBridge } from "@/components/CompleteBridge";
+import { ChatPanel } from "@/components/ChatPanel";
 import { DEFAULT_MODEL_ID } from "@/mastra/models";
 import { WidgetPreviewCard, AskUserCard, FoundryCard } from "@/components/chat-cards";
 import { useMentionStore } from "@/state/mentionStore";
@@ -470,8 +470,9 @@ export default function WidgetComposerPage() {
             style={
               { "--copilot-kit-primary-color": themeColor } as CSSProperties
             }
-            className="h-screen"
+            className="flex h-screen"
           >
+            <div className="relative flex min-w-0 flex-1 flex-col">
             <WidgetCanvas
               tree={widget}
               status={status}
@@ -530,16 +531,16 @@ export default function WidgetComposerPage() {
               }
             />
             <MentionOverlay elements={elements} />
-            <div className="cpk-dark contents">
-            <CopilotSidebar
-              defaultOpen={true}
+            </div>
+            <ChatPanel
+              agentId="default"
+              threadId={threadId}
               labels={{
                 modalHeaderTitle: "A2UI",
                 welcomeMessageText:
                   "👋 Describe what to build — I'll assemble it from bricks, wire it to data, then refine it. Try: \"a crypto dashboard\", then \"make @btc-chart candlesticks\". Use the Select tool to click a piece, or type its @id.",
               }}
             />
-            </div>
           </main>
         </CopilotChatConfigurationProvider>
       </div>
