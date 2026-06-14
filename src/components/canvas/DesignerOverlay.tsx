@@ -14,6 +14,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { findById } from "@/bricks/tree";
 import { useSelectionStore } from "@/state/selectionStore";
+import { dispatch } from "@/engine/dispatch";
 import { useBrickRects } from "./useBrickRects";
 import { SelectionToolbar } from "./SelectionToolbar";
 import type { CompositionNode } from "@/bricks/composition";
@@ -48,11 +49,51 @@ export function DesignerOverlay({
   }, [selectedId, hoverId]);
 
   const rects = useBrickRects(ids, surfaceRef, ids.length > 0);
-  if (typeof document === "undefined") return null;
 
-  const selRect = selectedId ? rects.get(selectedId) : undefined;
+  // Live resize preview (committed to CSS width/height on release).
+  const [preview, setPreview] = React.useState<{ w: number; h: number } | null>(null);
+
+  const rawSelRect = selectedId ? rects.get(selectedId) : undefined;
   const hovRect = hoverId && hoverId !== selectedId ? rects.get(hoverId) : undefined;
   const selNode = selectedId ? findById(tree, selectedId) : null;
+  // Effective selection rect uses the live preview size while resizing.
+  const selRect =
+    rawSelRect && preview
+      ? new DOMRect(rawSelRect.x, rawSelRect.y, preview.w, preview.h)
+      : rawSelRect;
+
+  const startResize = (e: React.PointerEvent, hx: number, hy: number) => {
+    if (!rawSelRect || !selectedId || !selNode) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const start = { x: e.clientX, y: e.clientY, w: rawSelRect.width, h: rawSelRect.height };
+    const onMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - start.x;
+      const dy = ev.clientY - start.y;
+      const w = Math.max(16, start.w + (hx === 1 ? dx : hx === 0 ? -dx : 0));
+      const h = Math.max(16, start.h + (hy === 1 ? dy : hy === 0 ? -dy : 0));
+      setPreview({ w, h });
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setPreview((p) => {
+        if (p) {
+          const prevStyle = ((selNode.props as { style?: Record<string, unknown> }).style) ?? {};
+          dispatch({
+            type: "tree/patch",
+            id: selectedId,
+            setProps: { style: { ...prevStyle, width: Math.round(p.w), height: Math.round(p.h) } },
+          });
+        }
+        return null;
+      });
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  if (typeof document === "undefined") return null;
 
   const box = (rect: DOMRect): React.CSSProperties => ({
     position: "fixed",
@@ -85,8 +126,8 @@ export function DesignerOverlay({
           {HANDLE_POSITIONS.map((h, i) => (
             <div
               key={i}
-              data-handle={`${h.x}:${h.y}`}
-              className="pointer-events-auto fixed z-[1002] h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-[var(--accent-brand)] bg-white"
+              onPointerDown={(e) => startResize(e, h.x, h.y)}
+              className="pointer-events-auto fixed z-[1002] h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-[var(--accent-brand)] bg-white"
               style={{
                 top: selRect.top + h.y * selRect.height,
                 left: selRect.left + h.x * selRect.width,
