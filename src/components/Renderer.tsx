@@ -17,6 +17,8 @@ import {
   validateComposition,
   type CompositionNode,
 } from "@/bricks/composition";
+import { resolveSx } from "@/bricks/style-tokens";
+import { cn } from "@/lib/utils";
 import type { RenderStatus } from "@/lib/types";
 
 /** Canvas edit controls passed down to every node (drag-to-rearrange). */
@@ -38,7 +40,12 @@ function NodeRenderer({ node }: { node: CompositionNode }): React.ReactElement {
     );
   }
 
-  const props = resolveProps(node, registry);
+  // The universal style system: `sx` (tokens) + `style` (inline) apply to the
+  // wrapper, not the brick component — strip them before spreading props.
+  const { sx, style, ...props } = resolveProps(node, registry) as Record<string, unknown> & {
+    sx?: unknown;
+    style?: React.CSSProperties;
+  };
   const Component = brick.Component;
 
   const rendered =
@@ -55,10 +62,14 @@ function NodeRenderer({ node }: { node: CompositionNode }): React.ReactElement {
       <Component {...props} />
     );
 
-  // Tag each addressable node for @-targeting (click-to-select + highlight).
-  if (node.id) {
-    const id = node.id;
-    return <NodeWrapper id={id}>{rendered}</NodeWrapper>;
+  const sxClass = resolveSx(sx);
+  // Wrap when the node is addressable (@-target) or carries styles.
+  if (node.id || sxClass || style) {
+    return (
+      <NodeWrapper id={node.id} sxClass={sxClass} style={style}>
+        {rendered}
+      </NodeWrapper>
+    );
   }
   return rendered;
 }
@@ -69,61 +80,83 @@ function NodeRenderer({ node }: { node: CompositionNode }): React.ReactElement {
  * so dragging one brick onto another reorders/reparents it (transactional/undoable
  * via onMove). stopPropagation keeps drag/drop on the innermost element.
  */
-function NodeWrapper({ id, children }: { id: string; children: React.ReactNode }) {
+function NodeWrapper({
+  id,
+  sxClass = "",
+  style,
+  children,
+}: {
+  id?: string;
+  sxClass?: string;
+  style?: React.CSSProperties;
+  children: React.ReactNode;
+}) {
   const { rearrange, onMove } = React.useContext(RenderControlsContext);
   const [edge, setEdge] = React.useState<"top" | "bottom" | null>(null);
   const [dragging, setDragging] = React.useState(false);
 
-  if (!rearrange) {
+  // Rearrange mode + addressable → a draggable box with insertion-line drop.
+  if (rearrange && id) {
+    const line =
+      "pointer-events-none absolute left-0 right-0 h-0.5 rounded-full bg-[var(--accent-brand)] shadow-[0_0_0_2px_rgba(99,102,241,0.25)]";
     return (
-      <div className="contents" data-brick-id={id}>
+      <div
+        data-brick-id={id}
+        draggable
+        onDragStart={(e) => {
+          e.stopPropagation();
+          e.dataTransfer.setData(DRAG_MIME, id);
+          e.dataTransfer.effectAllowed = "move";
+          setDragging(true);
+        }}
+        onDragEnd={() => setDragging(false)}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const r = e.currentTarget.getBoundingClientRect();
+          setEdge(e.clientY < r.top + r.height / 2 ? "top" : "bottom");
+        }}
+        onDragLeave={(e) => {
+          e.stopPropagation();
+          setEdge(null);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const dragId = e.dataTransfer.getData(DRAG_MIME);
+          const pos = edge === "bottom" ? "after" : "before";
+          setEdge(null);
+          if (dragId && dragId !== id) onMove?.(dragId, id, pos);
+        }}
+        style={style}
+        className={cn(
+          "group relative rounded-[var(--radius)] outline-dashed outline-1 outline-[var(--border)] transition-[outline] hover:outline-[var(--accent-brand)]",
+          dragging && "opacity-50",
+          sxClass,
+        )}
+      >
+        <span className="pointer-events-none absolute -left-2 top-1 z-10 hidden rounded bg-[var(--accent-brand)] px-1 text-[10px] leading-4 text-white shadow group-hover:block">
+          ⠿
+        </span>
+        {edge === "top" && <span className={line} style={{ top: -1 }} />}
+        {edge === "bottom" && <span className={line} style={{ bottom: -1 }} />}
         {children}
       </div>
     );
   }
-  // A faint accent insertion line marks where the dragged element will land.
-  const line =
-    "pointer-events-none absolute left-0 right-0 h-0.5 rounded-full bg-[var(--accent-brand)] shadow-[0_0_0_2px_rgba(99,102,241,0.25)]";
+
+  // Styled box (sx tokens / inline style) — a real box so styles apply.
+  if (sxClass || style) {
+    return (
+      <div data-brick-id={id} className={sxClass} style={style}>
+        {children}
+      </div>
+    );
+  }
+
+  // Addressable only → display:contents wrapper (out of layout).
   return (
-    <div
-      data-brick-id={id}
-      draggable
-      onDragStart={(e) => {
-        e.stopPropagation();
-        e.dataTransfer.setData(DRAG_MIME, id);
-        e.dataTransfer.effectAllowed = "move";
-        setDragging(true);
-      }}
-      onDragEnd={() => setDragging(false)}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const r = e.currentTarget.getBoundingClientRect();
-        setEdge(e.clientY < r.top + r.height / 2 ? "top" : "bottom");
-      }}
-      onDragLeave={(e) => {
-        e.stopPropagation();
-        setEdge(null);
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const dragId = e.dataTransfer.getData(DRAG_MIME);
-        const pos = edge === "bottom" ? "after" : "before";
-        setEdge(null);
-        if (dragId && dragId !== id) onMove?.(dragId, id, pos);
-      }}
-      className={
-        "group relative rounded-[var(--radius)] outline-dashed outline-1 outline-[var(--border)] transition-[outline] hover:outline-[var(--accent-brand)] " +
-        (dragging ? "opacity-50 " : "")
-      }
-    >
-      {/* Drag handle (appears on hover). */}
-      <span className="pointer-events-none absolute -left-2 top-1 z-10 hidden rounded bg-[var(--accent-brand)] px-1 text-[10px] leading-4 text-white shadow group-hover:block">
-        ⠿
-      </span>
-      {edge === "top" && <span className={line} style={{ top: -1 }} />}
-      {edge === "bottom" && <span className={line} style={{ bottom: -1 }} />}
+    <div className="contents" data-brick-id={id}>
       {children}
     </div>
   );

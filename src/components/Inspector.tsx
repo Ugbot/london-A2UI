@@ -1,0 +1,99 @@
+"use client";
+
+/**
+ * Style inspector — the right-side panel (dark chrome) for the SELECTED element.
+ * Toggling chips edits the element's `sx` style tokens; the change is applied
+ * transactionally (via the parent's onSetSx → patchById → applyTree → undoable).
+ * This is the visual half of the style system (bricks · mortar · styles).
+ */
+import { X } from "lucide-react";
+import type { CompositionNode } from "@/bricks/composition";
+
+interface Group {
+  label: string;
+  exclusive: boolean;
+  tokens: string[];
+}
+
+const GROUPS: Group[] = [
+  { label: "Background", exclusive: true, tokens: ["bg-muted", "bg-card", "bg-secondary", "bg-primary", "bg-accent"] },
+  { label: "Padding", exclusive: true, tokens: ["pad-sm", "pad", "pad-lg", "pad-xl"] },
+  { label: "Radius", exclusive: true, tokens: ["rounded", "rounded-lg", "rounded-xl", "rounded-full", "rounded-none"] },
+  { label: "Shadow", exclusive: true, tokens: ["shadow-sm", "shadow", "shadow-lg"] },
+  { label: "Text size", exclusive: true, tokens: ["text-sm", "text-base", "text-lg", "text-xl", "text-2xl"] },
+  { label: "Weight", exclusive: true, tokens: ["weight-medium", "weight-semibold", "weight-bold"] },
+  { label: "Align", exclusive: true, tokens: ["left", "center", "right"] },
+  { label: "More", exclusive: false, tokens: ["border", "italic", "uppercase", "muted", "w-full", "mx-auto"] },
+];
+
+// Short chip labels (the token without its group prefix).
+const SHORT: Record<string, string> = {
+  "bg-muted": "muted", "bg-card": "card", "bg-secondary": "secondary", "bg-primary": "primary", "bg-accent": "accent",
+  "pad-sm": "sm", pad: "md", "pad-lg": "lg", "pad-xl": "xl",
+  rounded: "md", "rounded-lg": "lg", "rounded-xl": "xl", "rounded-full": "full", "rounded-none": "none",
+  "shadow-sm": "sm", shadow: "md", "shadow-lg": "lg",
+  "text-sm": "sm", "text-base": "base", "text-lg": "lg", "text-xl": "xl", "text-2xl": "2xl",
+  "weight-medium": "medium", "weight-semibold": "semibold", "weight-bold": "bold",
+};
+
+export function Inspector({
+  node,
+  onSetSx,
+  onClose,
+}: {
+  node: CompositionNode;
+  onSetSx: (sx: string[]) => void;
+  onClose: () => void;
+}) {
+  const current = Array.isArray((node.props as { sx?: unknown })?.sx)
+    ? ((node.props as { sx?: string[] }).sx as string[])
+    : [];
+  const has = (t: string) => current.includes(t);
+
+  const toggle = (token: string, group: Group) => {
+    const next = new Set(current);
+    if (next.has(token)) next.delete(token);
+    else {
+      if (group.exclusive) group.tokens.forEach((t) => next.delete(t));
+      next.add(token);
+    }
+    onSetSx([...next]);
+  };
+
+  return (
+    <div className="chrome absolute right-4 top-4 z-30 flex max-h-[calc(100%-2rem)] w-60 flex-col overflow-auto rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] shadow-2xl">
+      <div className="sticky top-0 flex items-center justify-between border-b border-[var(--border)] bg-[var(--background)] px-3 py-2">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold">Style</div>
+          <div className="truncate font-mono text-[10px] text-[var(--muted-foreground)]">@{node.id} · {node.brick}</div>
+        </div>
+        <button onClick={onClose} className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)]">
+          <X size={14} />
+        </button>
+      </div>
+      <div className="flex flex-col gap-3 p-3">
+        {GROUPS.map((g) => (
+          <div key={g.label} className="flex flex-col gap-1.5">
+            <div className="text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">{g.label}</div>
+            <div className="flex flex-wrap gap-1">
+              {g.tokens.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => toggle(t, g)}
+                  className={[
+                    "rounded-[var(--radius-sm)] border px-2 py-0.5 text-[11px] transition-colors",
+                    has(t)
+                      ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
+                      : "border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)]",
+                  ].join(" ")}
+                >
+                  {SHORT[t] ?? t}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

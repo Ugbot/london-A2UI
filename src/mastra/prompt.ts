@@ -108,6 +108,17 @@ Connecting live data / building data-driven views (map a SPA over an API/CMS):
   ctx.record (current record), e.g. format a price or sum a list. Mortar is pure data
   logic — no network (use Connections for that).
 
+Styling any element (the style system — bricks · mortar · styles):
+- EVERY brick accepts an "sx" array of style tokens + an optional "style" object
+  (inline CSS), applied to that element's wrapper. Style ANY piece by setting them
+  via render_widget, or on an existing element via edit_element (setProps: { sx: […] }).
+- Tokens: pad-sm/pad/pad-lg/pad-xl, bg-muted/bg-card/bg-secondary/bg-primary/bg-accent,
+  rounded/rounded-lg/rounded-xl/rounded-full/rounded-none, shadow-sm/shadow/shadow-lg,
+  border, text-sm/text-base/text-lg/text-xl/text-2xl, weight-medium/weight-semibold/
+  weight-bold, italic, uppercase, muted, center/left/right, w-full/w-fit/mx-auto.
+  Example: sx: ["bg-card", "pad-lg", "rounded-xl", "shadow"].
+- For arbitrary values, use style, e.g. style: { maxWidth: 480, background: "#eef2ff" }.
+
 Research → dashboard:
 - For requests that need real, current information ("research X", "build a
   dashboard about Y"), call the "research" tool first. Then compose a dashboard

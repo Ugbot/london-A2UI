@@ -462,6 +462,10 @@ export default function WidgetComposerPage() {
                 const t = widgetRef.current;
                 if (t) applyTree(moveNode(t, dragId, targetId, position));
               }}
+              onSetSx={(id, sx) => {
+                const t = widgetRef.current;
+                if (t) applyTree(patchById(t, id, { setProps: { sx } }));
+              }}
               headerExtra={
                 <div className="flex items-center gap-3">
                   <button

@@ -4,13 +4,31 @@
  * Server-safe (no "use client"): the agent imports `listBricks`/`brickCatalog`
  * for tool definitions and embedding; the canvas imports `registry` to render.
  */
+import { z } from "zod";
 import { zodToJsonSchema } from "@/lib/zod-to-json-schema";
 import { BRICKS } from "./defs";
 import type { BrickDef } from "./types";
 
-/** name -> BrickDef. */
+/**
+ * The style system: EVERY brick accepts `sx` (style tokens) + `style` (inline CSS
+ * overrides), applied to its wrapper by the Renderer. We add these centrally here
+ * so validation/resolution allow them on any brick without touching 40 schemas.
+ * The agent learns the vocabulary from the system prompt (kept out of the
+ * per-brick catalog to avoid repeating it 40×).
+ */
+const STYLEABLE = {
+  sx: z.array(z.string()).optional(),
+  style: z.record(z.unknown()).optional(),
+};
+function withStyle(def: BrickDef): BrickDef {
+  return def.schema instanceof z.ZodObject
+    ? { ...def, schema: def.schema.extend(STYLEABLE) }
+    : def;
+}
+
+/** name -> BrickDef (with the universal sx/style props merged in). */
 export const registry: Map<string, BrickDef> = new Map(
-  BRICKS.map((b) => [b.name, b]),
+  BRICKS.map((b) => [b.name, withStyle(b)]),
 );
 
 /** Look up a brick by name. */

@@ -13,6 +13,8 @@ import { CursorLayer } from "@/collab/Cursors";
 import { Toolbar } from "@/components/Toolbar";
 import { ToolDock } from "@/components/ToolDock";
 import { ModeHud } from "@/components/ModeHud";
+import { Inspector } from "@/components/Inspector";
+import { findById } from "@/bricks/tree";
 import { useStyleLayers } from "@/style/StyleLayers";
 import { useMentionStore } from "@/state/mentionStore";
 import { cn } from "@/lib/utils";
@@ -29,9 +31,11 @@ export interface WidgetCanvasProps {
   headerExtra?: ReactNode;
   /** Apply a drag-to-rearrange reorder (transactional/undoable in the parent). */
   onMove?: (dragId: string, targetId: string, position: "before" | "after") => void;
+  /** Apply style tokens to an element (transactional/undoable in the parent). */
+  onSetSx?: (id: string, sx: string[]) => void;
 }
 
-export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report", headerExtra, onMove }: WidgetCanvasProps) {
+export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report", headerExtra, onMove, onSetSx }: WidgetCanvasProps) {
   const { mergedVars } = useStyleLayers();
   const mode = useMentionStore((s) => s.mode);
   const setMode = useMentionStore((s) => s.setMode);
@@ -40,6 +44,7 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
   const clearTarget = useMentionStore((s) => s.clearTarget);
   const selectMode = mode === "select";
   const moveMode = mode === "move";
+  const selectedNode = targetId ? findById(tree, targetId) : null;
   const prevKey = useRef<string>("");
   const [flash, setFlash] = useState(false);
 
@@ -115,6 +120,13 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
           style={{ backgroundColor: moveMode ? undefined : "var(--canvas-backdrop)" }}
         >
           <ModeHud />
+          {selectedNode && onSetSx && (
+            <Inspector
+              node={selectedNode}
+              onSetSx={(sx) => onSetSx(selectedNode.id!, sx)}
+              onClose={clearTarget}
+            />
+          )}
           {/* The artboard: a white elevated card the widget renders into. */}
           <div
             className={cn(
