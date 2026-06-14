@@ -6,8 +6,58 @@
  * transactionally (via the parent's onSetSx → patchById → applyTree → undoable).
  * This is the visual half of the style system (bricks · mortar · styles).
  */
-import { X } from "lucide-react";
+import { Lock, X } from "lucide-react";
 import type { CompositionNode } from "@/bricks/composition";
+import { getBrick } from "@/bricks/registry";
+import { zodToJsonSchema } from "@/lib/zod-to-json-schema";
+import { primaryTextProps, isBoundProp } from "@/bricks/text-props";
+import { dispatch } from "@/engine/dispatch";
+
+const SKIP_PROPS = new Set(["sx", "style", "bindKey", "bindField", "bindCompute"]);
+
+/** Ordered editable string props for a node (primary text props first). */
+function stringProps(node: CompositionNode): string[] {
+  const def = getBrick(node.brick);
+  if (!def) return [];
+  const json = zodToJsonSchema(def.schema) as { properties?: Record<string, { type?: string }> };
+  const all = Object.entries(json.properties ?? {})
+    .filter(([k, v]) => v?.type === "string" && !SKIP_PROPS.has(k))
+    .map(([k]) => k);
+  const primary = primaryTextProps(node.brick).filter((p) => all.includes(p));
+  return [...primary, ...all.filter((p) => !primary.includes(p))];
+}
+
+/** A single text field that commits on blur/Enter (remounts when the value changes externally). */
+function ContentField({ node, prop }: { node: CompositionNode; prop: string }) {
+  const value = String((node.props as Record<string, unknown>)[prop] ?? "");
+  const bound = isBoundProp(node, prop);
+  const commit = (v: string) => {
+    if (v !== value) dispatch({ type: "tree/patch", id: node.id!, setProps: { [prop]: v } });
+  };
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">
+        {prop}
+        {bound && <Lock size={9} className="opacity-60" />}
+      </span>
+      <input
+        key={`${node.id}:${prop}:${value}`}
+        defaultValue={value}
+        disabled={bound}
+        title={bound ? "Bound to live data" : undefined}
+        onBlur={(e) => commit(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          if (e.key === "Escape") {
+            (e.target as HTMLInputElement).value = value;
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        className="h-7 rounded-[var(--radius-sm)] border border-[var(--input)] bg-[var(--background)] px-2 text-xs outline-none focus:ring-2 focus:ring-[var(--ring)] disabled:opacity-50"
+      />
+    </label>
+  );
+}
 
 interface Group {
   label: string;
@@ -72,6 +122,17 @@ export function Inspector({
         </button>
       </div>
       <div className="flex flex-col gap-3 p-3">
+        {(() => {
+          const props = stringProps(node);
+          return props.length > 0 ? (
+            <div className="flex flex-col gap-2 border-b border-[var(--border)] pb-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">Content</div>
+              {props.map((p) => (
+                <ContentField key={p} node={node} prop={p} />
+              ))}
+            </div>
+          ) : null;
+        })()}
         {GROUPS.map((g) => (
           <div key={g.label} className="flex flex-col gap-1.5">
             <div className="text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">{g.label}</div>
