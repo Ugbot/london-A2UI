@@ -27,7 +27,9 @@ export function WidgetPreviewCard({ tree }: { tree: unknown }) {
       <div className="flex items-center gap-1.5 border-b border-[var(--border)] px-3 py-1.5 text-xs font-medium text-emerald-700">
         <span>✓</span> Rendered to canvas
       </div>
-      <div className="max-h-72 overflow-auto p-3">
+      {/* The preview is a mini-artboard: reset to light tokens so bricks stay
+          readable even though the chat sidebar is dark. */}
+      <div className="canvas-light max-h-72 overflow-auto rounded-b-[var(--radius)] p-3">
         <Renderer tree={result.value as CompositionNode} />
       </div>
     </div>

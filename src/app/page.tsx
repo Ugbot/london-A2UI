@@ -504,6 +504,7 @@ export default function WidgetComposerPage() {
               }
             />
             <MentionOverlay elements={elements} />
+            <div className="cpk-dark contents">
             <CopilotSidebar
               defaultOpen={true}
               labels={{
@@ -512,6 +513,7 @@ export default function WidgetComposerPage() {
                   "👋 Describe what to build — I'll assemble it from bricks, wire it to data, then refine it. Try: \"a crypto dashboard\", then \"make @btc-chart candlesticks\". Use the Select tool to click a piece, or type its @id.",
               }}
             />
+            </div>
           </main>
         </CopilotChatConfigurationProvider>
       </div>
