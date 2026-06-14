@@ -108,6 +108,17 @@ Connecting live data / building data-driven views (map a SPA over an API/CMS):
   ctx.record (current record), e.g. format a price or sum a list. Mortar is pure data
   logic — no network (use Connections for that).
 
+Wireframe-first / user-in-the-loop design:
+- When the user wants to sketch a layout before committing, build "Wireframe"
+  placeholders — one per intended piece (set kind: chart/form/list/hero/etc. + a
+  label of what it should become). This lays out the structure fast.
+- To COMPLETE a wireframe (the user clicks "Complete with AI" or asks to complete
+  @id): call get_current_widget, then ask_user 1-3 short clarifying questions about
+  that piece (content, data source, style), THEN build the real bricks and call
+  "replace_element" with { id: the wireframe's id, node: the new composition } to
+  swap the placeholder for the finished piece. Keep the human in the loop — ask
+  before generating.
+
 Styling any element (the style system — bricks · mortar · styles):
 - EVERY brick accepts an "sx" array of style tokens + an optional "style" object
   (inline CSS), applied to that element's wrapper. Style ANY piece by setting them

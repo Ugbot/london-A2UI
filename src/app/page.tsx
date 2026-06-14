@@ -22,6 +22,7 @@ import { ModelMenu } from "@/components/ModelMenu";
 import { ReportsMenu } from "@/components/ReportsMenu";
 import { DataPanel } from "@/components/DataPanel";
 import { ChatPersistence } from "@/components/ChatPersistence";
+import { CompleteBridge } from "@/components/CompleteBridge";
 import { DEFAULT_MODEL_ID } from "@/mastra/models";
 import { WidgetPreviewCard, AskUserCard, FoundryCard } from "@/components/chat-cards";
 import { useMentionStore } from "@/state/mentionStore";
@@ -41,6 +42,7 @@ import {
   duplicateById,
   insertChild,
   moveNode,
+  replaceById,
 } from "@/bricks/tree";
 import type { RenderStatus } from "@/lib/types";
 import { streamToElement } from "@/state/store";
@@ -308,6 +310,22 @@ export default function WidgetComposerPage() {
   });
 
   useFrontendTool({
+    name: "replace_element",
+    description:
+      "Replace an element (by id) with a NEW composition subtree. Use to COMPLETE a Wireframe placeholder with the real bricks after interviewing the user. Pass the replacement composition as `node`.",
+    parameters: z.object({
+      id: z.string().describe("Id of the element to replace (e.g. a Wireframe)"),
+      node: renderWidgetInputSchema.shape.tree,
+    }),
+    handler: async ({ id, node }) => {
+      const tree = widgetRef.current;
+      if (!tree) return "There is no widget on the canvas yet.";
+      if (!findById(tree, id)) return `No element "${id}".`;
+      return applyTree(replaceById(tree, id, node as CompositionNode));
+    },
+  });
+
+  useFrontendTool({
     name: "move_element",
     description:
       "Reorder/rearrange the canvas: move element `id` to sit immediately before `beforeId` (its new sibling), reparenting if needed. Use to reorder cards/sections or move a brick into another container.",
@@ -447,6 +465,7 @@ export default function WidgetComposerPage() {
       <div className={styles.mainPanel}>
         <CopilotChatConfigurationProvider agentId="default" threadId={threadId}>
           <ChatPersistence session={session} />
+          <CompleteBridge />
           <main
             style={
               { "--copilot-kit-primary-color": themeColor } as CSSProperties

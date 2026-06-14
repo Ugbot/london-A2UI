@@ -189,6 +189,20 @@ export function moveNode(
   return inserted ? result : tree; // targetId not found (or is root) → no-op
 }
 
+/** Return a new tree with the node at `id` REPLACED by `newNode` (subtree). */
+export function replaceById(
+  tree: CompositionNode,
+  id: string,
+  newNode: CompositionNode,
+): CompositionNode {
+  if (tree.id === id) return clone(newNode);
+  const walk = (node: CompositionNode): CompositionNode => ({
+    ...node,
+    children: node.children?.map((c) => (c.id === id ? clone(newNode) : walk(c))),
+  });
+  return walk(clone(tree));
+}
+
 /** Return a new tree with `child` inserted under `parentId` (at end, or index). */
 export function insertChild(
   tree: CompositionNode,

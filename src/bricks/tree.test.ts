@@ -8,6 +8,7 @@ import {
   duplicateById,
   insertChild,
   moveNode,
+  replaceById,
   labelOf,
 } from "./tree";
 import type { CompositionNode } from "./composition";
@@ -34,6 +35,18 @@ describe("moveNode (drag-to-rearrange)", () => {
   it("supports position 'after' (move a after b)", () => {
     const r = moveNode(make(), "a", "b", "after");
     expect(order(r)).toEqual(["b", "a", "c"]);
+  });
+
+  it("replaceById swaps a node for a new subtree (e.g. wireframe → real bricks)", () => {
+    const replacement: CompositionNode = {
+      brick: "Card",
+      id: "real",
+      props: {},
+      children: [{ brick: "Heading", props: { text: "Done" }, id: "h" }],
+    };
+    const r = replaceById(make(), "a", replacement);
+    expect(order(r)).toEqual(["real", "b", "c"]);
+    expect(findById(r, "h")?.brick).toBe("Heading");
   });
 
   it("reparents a node before a target in another container (move a before d)", () => {

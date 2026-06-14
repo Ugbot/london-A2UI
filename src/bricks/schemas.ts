@@ -220,6 +220,14 @@ export const apiDataSchema = z.object({
   label: z.string().optional(),
 });
 
+export const wireframeSchema = z.object({
+  label: z.string().describe("What this placeholder should become, e.g. 'BTC price chart'"),
+  kind: z
+    .enum(["chart", "form", "list", "table", "card", "hero", "text", "image", "section", "custom"])
+    .default("custom"),
+  note: z.string().optional().describe("Extra hints for how to complete it"),
+});
+
 export const repeaterSchema = z.object({
   bindKey: z.string().describe("Store key holding an ARRAY of records (a dataset). Renders its child template once per record."),
   empty: z.string().default("No items.").describe("Text shown when the dataset is empty"),
@@ -379,5 +387,6 @@ export type DataSourceProps = z.infer<typeof dataSourceSchema>;
 export type ApiDataProps = z.infer<typeof apiDataSchema>;
 export type RepeaterProps = z.infer<typeof repeaterSchema>;
 export type FormProps = z.infer<typeof formSchema>;
+export type WireframeProps = z.infer<typeof wireframeSchema>;
 export type ScreensProps = z.infer<typeof screensSchema>;
 export type ActionButtonProps = z.infer<typeof actionButtonSchema>;

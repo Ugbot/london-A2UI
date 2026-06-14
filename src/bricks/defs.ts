@@ -276,6 +276,13 @@ export const BRICKS: BrickDef[] = [
     Component: C.Form,
   }),
   defineBrick({
+    name: "Wireframe",
+    description: "A low-fidelity PLACEHOLDER for a piece to fill in later (user-in-the-loop design). Renders a labelled dashed block with a 'Complete with AI' button. Use to sketch a layout fast (one Wireframe per intended piece); each is completed later by interviewing the user and replacing it with real bricks via replace_element.",
+    tags: ["wireframe", "placeholder", "sketch", "lo-fi", "scaffold", "draft", "layout", "stub"],
+    schema: S.wireframeSchema,
+    Component: C.Wireframe,
+  }),
+  defineBrick({
     name: "Screens",
     description: "A multi-screen SPA wrapper: a nav bar switches between full child compositions (one child per label, in order). Use to build multi-page apps with shared state.",
     tags: ["spa", "navigation", "screens", "router", "pages", "tabs", "app", "container"],

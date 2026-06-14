@@ -29,6 +29,7 @@ import { useWidgetStore } from "@/state/store";
 import { RecordProvider, useRecordField, useRecord } from "@/state/record";
 import { assembleFormBody } from "./form-util";
 import { runMortar } from "@/mortar/run";
+import { useCompleteStore } from "@/state/completeStore";
 import {
   Card as UICard,
   CardContent,
@@ -43,6 +44,7 @@ import type {
   AlertProps,
   AnimatedProps,
   ApiDataProps,
+  WireframeProps,
   AvatarProps,
   BadgeProps,
   BarChartProps,
@@ -839,6 +841,36 @@ export function Form(props: WithChildren<FormProps>) {
         )}
       </div>
     </form>
+  );
+}
+
+const WIREFRAME_ICON: Record<string, string> = {
+  chart: "📊", form: "📝", list: "☰", table: "▦", card: "▭", hero: "★",
+  text: "¶", image: "🖼", section: "▤", custom: "✎",
+};
+
+/** A low-fi placeholder for a piece to fill in later. "Complete with AI" queues
+ *  a completion request → the agent interviews the user, then replaces it. */
+export function Wireframe({ label, kind, note }: WireframeProps) {
+  const request = useCompleteStore((s) => s.request);
+  return (
+    <div className="flex min-h-[8rem] flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border-2 border-dashed border-[var(--border)] bg-[var(--muted)] p-6 text-center">
+      <div className="text-2xl opacity-70">{WIREFRAME_ICON[kind] ?? "✎"}</div>
+      <div className="text-sm font-semibold text-[var(--foreground)]">{label}</div>
+      <div className="text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">
+        {kind} · wireframe
+      </div>
+      {note && <div className="max-w-xs text-xs text-[var(--muted-foreground)]">{note}</div>}
+      <button
+        onClick={(e) => {
+          const host = (e.currentTarget.closest("[data-brick-id]") as HTMLElement | null)?.dataset.brickId;
+          if (host) request({ id: host, label, kind });
+        }}
+        className="mt-1 rounded-full bg-[var(--accent-brand,#6366f1)] px-3 py-1 text-xs font-medium text-white hover:opacity-90"
+      >
+        ✨ Complete with AI
+      </button>
+    </div>
   );
 }
 
