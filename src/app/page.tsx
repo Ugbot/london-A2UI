@@ -120,10 +120,14 @@ export default function WidgetComposerPage() {
   // Feed the current widget + element list + current selection to the agent
   // every turn, so a follow-up prompt edits what's on the canvas, resolves
   // @element-id mentions, and knows which element is currently targeted.
+  // Lean, hierarchical context: send only the ELEMENT INDEX (id, brick, label) +
+  // the current selection — NOT the full composition tree (which grows unbounded
+  // and would burn tokens every turn). The agent drills into the full subtree on
+  // demand via get_current_widget when it actually needs to edit.
   useAgentContext({
     description:
-      "The current widget on the canvas (composition tree), its addressable elements (each with a stable id), and `selected` — the element the user has clicked-to-target (if any). Use this to EDIT the existing widget on follow-up requests, to resolve @element-id mentions, and when the user says 'this/it' without an id, prefer the `selected` element.",
-    value: JSON.stringify({ widget: widget ?? null, elements, selected: selectedId }),
+      "The element index of the widget on the canvas — each addressable element's { id, brick, label } — plus `selected` (the element the user clicked-to-target, if any) and `count`. Use it to see what exists and resolve @element-id mentions. For the FULL tree/props of an element before editing, call get_current_widget. When the user says 'this/it' without an id, prefer `selected`.",
+    value: JSON.stringify({ count: elements.length, elements, selected: selectedId }),
   });
 
   // Runtime model selection: a plumbing channel (sentinel description) the agent
