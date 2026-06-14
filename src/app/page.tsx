@@ -46,6 +46,8 @@ import {
 } from "@/bricks/tree";
 import type { RenderStatus } from "@/lib/types";
 import { streamToElement } from "@/state/store";
+import { dispatch } from "@/engine/dispatch";
+import { HistoryScrubber } from "@/components/HistoryScrubber";
 import { useSharedWidget, useCanvasHistory } from "@/collab/hooks";
 import { CollabControls } from "@/collab/CollabControls";
 import { useCollab } from "@/collab/provider";
@@ -482,14 +484,12 @@ export default function WidgetComposerPage() {
               status={status}
               onStatus={setStatus}
               title={reportTitle}
-              onMove={(dragId, targetId, position) => {
-                const t = widgetRef.current;
-                if (t) applyTree(moveNode(t, dragId, targetId, position));
-              }}
-              onSetSx={(id, sx) => {
-                const t = widgetRef.current;
-                if (t) applyTree(patchById(t, id, { setProps: { sx } }));
-              }}
+              onMove={(dragId, targetId, position) =>
+                dispatch({ type: "tree/move", dragId, targetId, position })
+              }
+              onSetSx={(id, sx) =>
+                dispatch({ type: "tree/patch", id, setProps: { sx } })
+              }
               headerExtra={
                 <div className="flex items-center gap-3">
                   <button
@@ -522,6 +522,7 @@ export default function WidgetComposerPage() {
                       ↷
                     </button>
                   </div>
+                  <HistoryScrubber />
                   <span className="h-5 w-px bg-[var(--border)]" />
                   <ReportsMenu currentSession={session} onOpen={setSession} />
                   <DataPanel />
