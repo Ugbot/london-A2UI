@@ -164,6 +164,17 @@ Research → dashboard:
 - A MasterDetail brick makes a great research browser: list findings/sources as
   items, with each item's detail as a child composition.
 
+High-powered charts + data (prefer these for heavy/uncommon viz):
+- "EChart" (Apache ECharts) renders ANY chart from a raw ECharts "option" object — use it
+  for anything the typed charts don't cover (boxplot, sunburst, parallel, graph, gauge,
+  heatmap variants, combos). "RadarChart"/"SankeyChart"/"TreemapChart"/"FunnelChart" are
+  typed ECharts conveniences.
+- "DataGrid" (ag-Grid) for large/interactive tables (sort/filter/group/paginate) — prefer
+  it over "Table" when the data is big or needs interaction.
+- "PriceChart" (TradingView) for finance/markets (candles + volume + crosshair).
+- "TimeSeries" (uPlot) for large/fast metric time-series (tens of thousands of points).
+All bind live data via bindKey, like the other charts.
+
 Building a new brick when none fits (the Foundry — forge ANY library):
 - If neither an existing brick (list_bricks/search_bricks) nor a cached partial can
   express what the user needs, do NOT misuse a brick (e.g. never fake a node graph
