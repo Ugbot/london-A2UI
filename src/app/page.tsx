@@ -10,15 +10,12 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
-import { ThreadsDrawer } from "@/components/threads-drawer";
-import { ThreadsPanelGate } from "@/components/threads-drawer/locked-state";
-import styles from "@/components/threads-drawer/threads-drawer.module.css";
+import { ProjectBrowser } from "@/components/ProjectBrowser";
 
 import { WidgetCanvas } from "@/components/WidgetCanvas";
 import { MentionOverlay } from "@/components/MentionOverlay";
 import { ExportMenu } from "@/components/ExportMenu";
 import { ModelMenu } from "@/components/ModelMenu";
-import { ReportsMenu } from "@/components/ReportsMenu";
 import { DataPanel } from "@/components/DataPanel";
 import { ChatPersistence } from "@/components/ChatPersistence";
 import { CompleteBridge } from "@/components/CompleteBridge";
@@ -542,15 +539,9 @@ export default function WidgetComposerPage() {
   });
 
   return (
-    <div className={`${styles.layout} threadsLayout`}>
-      <ThreadsPanelGate>
-        <ThreadsDrawer
-          agentId="default"
-          threadId={threadId}
-          onThreadChange={(id) => setSession(id ?? crypto.randomUUID())}
-        />
-      </ThreadsPanelGate>
-      <div className={styles.mainPanel}>
+    <div className="flex h-screen">
+      <ProjectBrowser />
+      <div className="min-w-0 flex-1">
         <CopilotChatConfigurationProvider agentId="default" threadId={threadId}>
           <ChatPersistence session={session} />
           <CompleteBridge />
@@ -606,7 +597,6 @@ export default function WidgetComposerPage() {
                   </div>
                   <HistoryScrubber />
                   <span className="h-5 w-px bg-[var(--border)]" />
-                  <ReportsMenu currentSession={session} onOpen={setSession} />
                   <DataPanel />
                   <span className="h-5 w-px bg-[var(--border)]" />
                   <ModelMenu value={modelId} onChange={setModelId} />

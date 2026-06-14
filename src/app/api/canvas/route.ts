@@ -6,7 +6,7 @@
  * composition tree, not arbitrary blobs), and errors are sanitised (logged
  * server-side, generic message to the client).
  */
-import { loadCanvas, saveCanvas, listCanvases } from "@/server/cache";
+import { loadCanvas, saveCanvas, listCanvases, renameCanvas, deleteCanvas } from "@/server/cache";
 
 export const runtime = "nodejs";
 
@@ -66,5 +66,37 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("[canvas:POST]", err);
     return fail("failed to save canvas", 500);
+  }
+}
+
+/** Rename a project (set its user-editable name). */
+export async function PATCH(req: Request) {
+  let body: { threadId?: string; name?: string };
+  try {
+    body = (await req.json()) as { threadId?: string; name?: string };
+  } catch {
+    return fail("invalid JSON body", 400);
+  }
+  if (!body.threadId || !ID_RE.test(body.threadId)) return fail("valid threadId required", 400);
+  if (typeof body.name !== "string" || body.name.length > 200) return fail("valid name required", 400);
+  try {
+    await renameCanvas(body.threadId, body.name);
+    return Response.json({ ok: true });
+  } catch (err) {
+    console.error("[canvas:PATCH]", err);
+    return fail("failed to rename project", 500);
+  }
+}
+
+/** Delete a project (canvas + chat). */
+export async function DELETE(req: Request) {
+  const threadId = new URL(req.url).searchParams.get("threadId");
+  if (!threadId || !ID_RE.test(threadId)) return fail("valid threadId required", 400);
+  try {
+    await deleteCanvas(threadId);
+    return Response.json({ ok: true });
+  } catch (err) {
+    console.error("[canvas:DELETE]", err);
+    return fail("failed to delete project", 500);
   }
 }

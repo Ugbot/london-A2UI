@@ -111,6 +111,8 @@ export function migrate(): Promise<void> {
           updated_at timestamptz NOT NULL DEFAULT now()
         )
       `);
+      // User-editable project name (overrides the title derived from the widget tree).
+      await client.query(`ALTER TABLE canvases ADD COLUMN IF NOT EXISTS name text`);
 
       // Per-session chat transcripts (the AG-UI message array) so the
       // conversation restores alongside the canvas — independent of the chat

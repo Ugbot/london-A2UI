@@ -227,20 +227,35 @@ function canvasTitle(widget: unknown): string {
   return walk(widget) ?? (widget as { brick?: string })?.brick ?? "Untitled report";
 }
 
-/** List saved canvases (most-recent first) for the open-report picker. */
+/** List saved projects (most-recent first). Prefers the user-set name over the derived title. */
 export async function listCanvases(limit = 50): Promise<CanvasSummary[]> {
   await migrate();
   const pool = await getPool();
   const { rows } = await pool.query(
-    `SELECT thread_id, widget, updated_at
+    `SELECT thread_id, name, widget, updated_at
        FROM canvases ORDER BY updated_at DESC LIMIT $1`,
     [limit],
   );
   return rows.map((r) => ({
     id: r.thread_id as string,
-    title: canvasTitle(r.widget),
+    title: (typeof r.name === "string" && r.name.trim()) ? r.name.trim() : canvasTitle(r.widget),
     updatedAt: (r.updated_at as Date).toISOString(),
   }));
+}
+
+/** Set a project's user-editable name (touches updated_at so it sorts to the top). */
+export async function renameCanvas(threadId: string, name: string): Promise<void> {
+  await migrate();
+  const pool = await getPool();
+  await pool.query(`UPDATE canvases SET name = $2 WHERE thread_id = $1`, [threadId, name.trim() || null]);
+}
+
+/** Delete a project: its canvas + chat transcript. */
+export async function deleteCanvas(threadId: string): Promise<void> {
+  await migrate();
+  const pool = await getPool();
+  await pool.query(`DELETE FROM canvases WHERE thread_id = $1`, [threadId]);
+  await pool.query(`DELETE FROM chats WHERE session_id = $1`, [threadId]);
 }
 
 /** Persist a session's chat transcript (AG-UI message array). */
