@@ -27,7 +27,7 @@ export function ChatPanel({
 
   if (!open) {
     return (
-      <div className="cpk-dark chrome flex h-screen w-12 shrink-0 flex-col items-center border-l border-[var(--border)] bg-[var(--background)] py-3">
+      <div className="dark cpk-dark chrome flex h-screen w-12 shrink-0 flex-col items-center border-l border-[var(--border)] bg-[var(--background)] py-3">
         <button
           onClick={() => setOpen(true)}
           title="Open assistant"
@@ -43,7 +43,7 @@ export function ChatPanel({
   }
 
   return (
-    <aside className="cpk-dark chrome flex h-screen w-[26rem] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--background)] text-[var(--foreground)]">
+    <aside className="dark cpk-dark chrome flex h-screen w-[26rem] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--background)] text-[var(--foreground)]">
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--border)] px-3">
         <div className="flex items-center gap-2">
           <span className="grid h-6 w-6 place-items-center rounded-full bg-[var(--primary)] text-[var(--primary-foreground)]">

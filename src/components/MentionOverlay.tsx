@@ -10,8 +10,33 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import type { ElementRef } from "@/bricks/tree";
+import { useMentionStore } from "@/state/mentionStore";
 
 const CHAT_PLACEHOLDER = "Type a message";
+
+/** Is this the chat composer textarea? Robust to label changes: match the known
+ *  placeholder OR any textarea inside the CopilotKit chat region. */
+function isChatArea(el: EventTarget | null): el is HTMLTextAreaElement {
+  if (!(el instanceof HTMLTextAreaElement)) return false;
+  if ((el.getAttribute("placeholder") ?? "").includes(CHAT_PLACEHOLDER)) return true;
+  return !!el.closest("[data-copilotkit], .cpk-dark");
+}
+
+/** Find the chat composer textarea in the DOM (for click-to-insert). */
+function findChatTextarea(): HTMLTextAreaElement | null {
+  const byPlaceholder = document.querySelector<HTMLTextAreaElement>(
+    `textarea[placeholder*="${CHAT_PLACEHOLDER}"]`,
+  );
+  if (byPlaceholder) return byPlaceholder;
+  return document.querySelector<HTMLTextAreaElement>(".cpk-dark textarea, [data-copilotkit] textarea");
+}
+
+/** Set a textarea's value through React's native setter so onChange fires. */
+function setTextareaValue(ta: HTMLTextAreaElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+  setter?.call(ta, value);
+  ta.dispatchEvent(new Event("input", { bubbles: true }));
+}
 
 export function MentionOverlay({ elements }: { elements: ElementRef[] }) {
   const [open, setOpen] = React.useState(false);
@@ -20,9 +45,20 @@ export function MentionOverlay({ elements }: { elements: ElementRef[] }) {
   const [rect, setRect] = React.useState<DOMRect | null>(null);
   const taRef = React.useRef<HTMLTextAreaElement | null>(null);
 
-  const isChatArea = (el: EventTarget | null): el is HTMLTextAreaElement =>
-    el instanceof HTMLTextAreaElement &&
-    (el.getAttribute("placeholder") ?? "").includes(CHAT_PLACEHOLDER);
+  // Click-to-select on the canvas queues an "@id " — insert it into the chat input.
+  const pendingInsert = useMentionStore((s) => s.pendingInsert);
+  const consumeInsert = useMentionStore((s) => s.consumeInsert);
+  React.useEffect(() => {
+    if (!pendingInsert) return;
+    const ta = findChatTextarea();
+    const text = consumeInsert();
+    if (!ta || !text) return;
+    const needsSpace = ta.value.length > 0 && !/\s$/.test(ta.value);
+    const next = ta.value + (needsSpace ? " " : "") + text;
+    setTextareaValue(ta, next);
+    ta.focus();
+    ta.setSelectionRange(next.length, next.length);
+  }, [pendingInsert, consumeInsert]);
 
   const filtered = React.useMemo(
     () =>

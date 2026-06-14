@@ -138,6 +138,27 @@ body {
   --input: oklch(0.36 0.018 264);
 }
 
+/*
+ * The chat composer: CopilotKit's <textarea> is `color: inherit` on a transparent
+ * background, so on the dark chat panel it MUST render light text + a visible
+ * placeholder + a caret — otherwise you get invisible (light-on-light / light-on-
+ * white) typing. Force readable contrast directly on the field, independent of
+ * CopilotKit's utility classes. (`-webkit-text-fill-color` beats inherited fills.)
+ */
+.cpk-dark textarea,
+.cpk-dark input[type="text"],
+.cpk-dark [contenteditable="true"] {
+  color: var(--foreground) !important;
+  -webkit-text-fill-color: var(--foreground) !important;
+  caret-color: var(--accent-brand);
+}
+.cpk-dark textarea::placeholder,
+.cpk-dark input[type="text"]::placeholder {
+  color: var(--muted-foreground) !important;
+  -webkit-text-fill-color: var(--muted-foreground) !important;
+  opacity: 1 !important;
+}
+
 body,
 html {
   height: 100%;
