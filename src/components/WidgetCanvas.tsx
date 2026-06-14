@@ -1,16 +1,18 @@
 "use client";
 
 /**
- * The canvas region that renders the current widget composition tree. Kept
- * agent-agnostic: it takes a `tree` and reports render status, so it can be
- * driven by agent state (the main page) or a static tree (the preview page).
- *
- * When the tree changes, the canvas gives a clear visual cue (a flash ring +
- * an "Updated" badge) so it's obvious WHEN new content lands.
+ * The canvas region: a dark toolbar + a left tool dock framing a bright artboard
+ * (Figma-style). The artboard is a white elevated card floating on a soft
+ * backdrop; bricks render on the LIGHT tokens (never light-on-white). Interaction
+ * mode (select / move) comes from the shared store and is surfaced by the dock +
+ * a floating ModeHud.
  */
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Renderer } from "@/components/Renderer";
 import { CursorLayer } from "@/collab/Cursors";
+import { Toolbar } from "@/components/Toolbar";
+import { ToolDock } from "@/components/ToolDock";
+import { ModeHud } from "@/components/ModeHud";
 import { useStyleLayers } from "@/style/StyleLayers";
 import { useMentionStore } from "@/state/mentionStore";
 import { cn } from "@/lib/utils";
@@ -21,38 +23,27 @@ export interface WidgetCanvasProps {
   tree: CompositionNode | null;
   status?: RenderStatus | null;
   onStatus?: (status: RenderStatus) => void;
-  /** Extra content rendered on the right of the header (e.g. presence). */
+  /** Report title shown in the toolbar. */
+  title?: string;
+  /** Action controls rendered on the right of the toolbar. */
   headerExtra?: ReactNode;
   /** Apply a drag-to-rearrange reorder (transactional/undoable in the parent). */
   onMove?: (dragId: string, beforeId: string) => void;
 }
 
-function StatusPill({ status, updated }: { status: RenderStatus | null | undefined; updated: boolean }) {
-  if (updated) {
-    return <span className="text-xs font-medium text-emerald-600">✓ Updated just now</span>;
-  }
-  if (!status) {
-    return <span className="text-xs text-[var(--muted-foreground)]">assembled from bricks</span>;
-  }
-  if (status.ok) {
-    return <span className="text-xs font-medium text-emerald-600">● rendered</span>;
-  }
-  return (
-    <span className="text-xs font-medium text-red-600">
-      ● {status.stage} error ({status.errors.length})
-    </span>
-  );
-}
-
-export function WidgetCanvas({ tree, status, onStatus, headerExtra, onMove }: WidgetCanvasProps) {
+export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report", headerExtra, onMove }: WidgetCanvasProps) {
   const { mergedVars } = useStyleLayers();
-  const { selectMode, setSelectMode, targetId, selectElement, clearTarget } = useMentionStore();
+  const mode = useMentionStore((s) => s.mode);
+  const setMode = useMentionStore((s) => s.setMode);
+  const targetId = useMentionStore((s) => s.targetId);
+  const selectElement = useMentionStore((s) => s.selectElement);
+  const clearTarget = useMentionStore((s) => s.clearTarget);
+  const selectMode = mode === "select";
+  const moveMode = mode === "move";
   const prevKey = useRef<string>("");
   const [flash, setFlash] = useState(false);
-  const [rearrange, setRearrange] = useState(false);
 
-  // Click-to-target: in select mode, clicking a tagged element selects it
-  // (queues an @id into the chat input + highlights it).
+  // Click-to-target in Select mode → queue an @mention + highlight.
   const onCanvasClick = (e: React.MouseEvent) => {
     if (!selectMode) return;
     const el = (e.target as HTMLElement).closest("[data-brick-id]");
@@ -64,7 +55,17 @@ export function WidgetCanvas({ tree, status, onStatus, headerExtra, onMove }: Wi
     }
   };
 
-  // Flag a clear "just updated" cue whenever the rendered tree actually changes.
+  // Esc exits the current mode.
+  useEffect(() => {
+    if (mode === "none") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMode("none");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mode, setMode]);
+
+  // Flag a "just updated" cue whenever the rendered tree actually changes.
   useEffect(() => {
     const key = tree ? JSON.stringify(tree) : "";
     if (key && key !== prevKey.current) {
@@ -80,67 +81,54 @@ export function WidgetCanvas({ tree, status, onStatus, headerExtra, onMove }: Wi
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-3">
-        <h1 className="text-sm font-semibold tracking-tight">Widget Canvas</h1>
-        <div className="flex items-center gap-4">
-          <StatusPill status={status} updated={flash} />
-          {targetId && (
-            <span className="flex items-center gap-1 rounded-full bg-[var(--secondary)] px-2 py-0.5 text-xs">
-              <span className="font-mono text-[var(--primary)]">@{targetId}</span>
-              <button onClick={clearTarget} className="text-[var(--muted-foreground)]">✕</button>
-            </span>
-          )}
-          <button
-            onClick={() => setSelectMode(!selectMode)}
-            className={cn(
-              "rounded-[var(--radius)] border px-2.5 py-1 text-xs font-medium",
-              selectMode
-                ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
-                : "border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:bg-[var(--secondary)]",
+      <Toolbar
+        title={title}
+        status={status}
+        updated={flash}
+        right={
+          <div className="flex items-center gap-1.5">
+            {targetId && (
+              <span className="flex items-center gap-1 rounded-full bg-[var(--secondary)] px-2 py-0.5 text-xs">
+                <span className="font-mono text-[var(--primary-foreground)]">@{targetId}</span>
+                <button onClick={clearTarget} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">✕</button>
+              </span>
             )}
-            title="Click an element on the canvas to @-target it"
-          >
-            {selectMode ? "Click an element…" : "Target"}
-          </button>
-          {onMove && (
-            <button
-              onClick={() => setRearrange((r) => !r)}
-              className={cn(
-                "rounded-[var(--radius)] border px-2.5 py-1 text-xs font-medium",
-                rearrange
-                  ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
-                  : "border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:bg-[var(--secondary)]",
-              )}
-              title="Drag elements to rearrange them"
-            >
-              {rearrange ? "Done rearranging" : "Rearrange"}
-            </button>
-          )}
-          {headerExtra}
-        </div>
-      </div>
-      {/* Highlight the targeted element's rendered root (contents wrapper child). */}
+            {headerExtra}
+          </div>
+        }
+      />
+
+      {/* Highlight the targeted element's rendered root. */}
       {targetId && (
-        <style>{`[data-brick-id="${targetId}"] > * { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--radius); }`}</style>
+        <style>{`[data-brick-id="${targetId}"] > * { outline: 2px solid var(--accent-brand); outline-offset: 2px; border-radius: var(--radius); }`}</style>
       )}
-      <div className="flex-1 overflow-auto p-3">
+
+      <div className="flex min-h-0 flex-1">
+        <ToolDock />
         <div
           onClickCapture={onCanvasClick}
           className={cn(
-            "widget-surface min-h-full rounded-[var(--radius)] p-3 transition-shadow duration-300",
-            // Paint the themed palette so style layers (esp. full themes) are
-            // visible: the surface takes the layer's background/foreground.
-            "bg-[var(--background)] text-[var(--foreground)]",
-            flash && "ring-2 ring-[var(--primary)] ring-offset-2 ring-offset-[var(--background)]",
+            "relative flex-1 overflow-auto p-8 transition-colors",
+            moveMode ? "bg-[var(--accent)]/40" : "",
             selectMode && "cursor-crosshair",
           )}
-          style={mergedVars as CSSProperties}
+          style={{ backgroundColor: moveMode ? undefined : "var(--canvas-backdrop)" }}
         >
-          <CursorLayer>
-            <div className={flash ? "animate-[brick-fade_400ms_ease]" : undefined}>
-              <Renderer tree={tree} onStatus={onStatus} rearrange={rearrange} onMove={onMove} />
-            </div>
-          </CursorLayer>
+          <ModeHud />
+          {/* The artboard: a white elevated card the widget renders into. */}
+          <div
+            className={cn(
+              "widget-surface mx-auto min-h-[60vh] max-w-5xl rounded-[var(--radius-xl)] bg-[var(--background)] p-6 text-[var(--foreground)] shadow-[0_8px_40px_rgba(0,0,0,0.10)] ring-1 ring-black/5 transition-shadow duration-300",
+              flash && "ring-2 ring-[var(--accent-brand)]",
+            )}
+            style={mergedVars as CSSProperties}
+          >
+            <CursorLayer>
+              <div className={flash ? "animate-[brick-fade_400ms_ease]" : undefined}>
+                <Renderer tree={tree} onStatus={onStatus} rearrange={moveMode} onMove={onMove} />
+              </div>
+            </CursorLayer>
+          </div>
         </div>
       </div>
     </div>

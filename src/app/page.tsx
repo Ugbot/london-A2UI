@@ -96,6 +96,22 @@ export default function WidgetComposerPage() {
 
   // Flat index of addressable elements — for @-mentions + agent context.
   const elements = useMemo(() => indexElements(widget), [widget]);
+
+  // Report title for the toolbar: the first Heading/title, else "Untitled".
+  const reportTitle = useMemo(() => {
+    const find = (n: CompositionNode | null): string | null => {
+      if (!n) return null;
+      const p = (n.props ?? {}) as Record<string, unknown>;
+      if (n.brick === "Heading" && typeof p.text === "string" && p.text.trim()) return p.text.trim();
+      if (typeof p.title === "string" && p.title.trim()) return p.title.trim();
+      for (const c of n.children ?? []) {
+        const t = find(c);
+        if (t) return t;
+      }
+      return null;
+    };
+    return find(widget) ?? "Untitled report";
+  }, [widget]);
   // The element the user clicked-to-target on the canvas (if any).
   const selectedId = useMentionStore((s) => s.targetId);
 
@@ -441,6 +457,7 @@ export default function WidgetComposerPage() {
               tree={widget}
               status={status}
               onStatus={setStatus}
+              title={reportTitle}
               onMove={(dragId, beforeId) => {
                 const t = widgetRef.current;
                 if (t) applyTree(moveNode(t, dragId, beforeId));
@@ -490,9 +507,9 @@ export default function WidgetComposerPage() {
             <CopilotSidebar
               defaultOpen={true}
               labels={{
-                modalHeaderTitle: "Widget Composer",
+                modalHeaderTitle: "A2UI",
                 welcomeMessageText:
-                  "👋 Describe a widget — I'll assemble it from bricks, then refine it. Try: \"a crypto dashboard\", then \"make @btc-chart candlesticks\". Use the Target button to click a piece, or type its @id.",
+                  "👋 Describe what to build — I'll assemble it from bricks, wire it to data, then refine it. Try: \"a crypto dashboard\", then \"make @btc-chart candlesticks\". Use the Select tool to click a piece, or type its @id.",
               }}
             />
           </main>

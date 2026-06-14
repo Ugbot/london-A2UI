@@ -8,22 +8,26 @@
  */
 import { create } from "zustand";
 
+/** The active canvas interaction mode (driven by the tool dock). */
+export type EditorMode = "none" | "select" | "move";
+
 interface MentionStore {
-  selectMode: boolean;
+  mode: EditorMode;
   targetId: string | null;
   pendingInsert: string | null;
-  setSelectMode: (on: boolean) => void;
+  setMode: (mode: EditorMode) => void;
   selectElement: (id: string) => void;
   consumeInsert: () => string | null;
   clearTarget: () => void;
 }
 
 export const useMentionStore = create<MentionStore>((set, get) => ({
-  selectMode: false,
+  mode: "none",
   targetId: null,
   pendingInsert: null,
-  setSelectMode: (on) => set({ selectMode: on }),
-  selectElement: (id) => set({ targetId: id, pendingInsert: `@${id} `, selectMode: false }),
+  setMode: (mode) => set({ mode }),
+  // Selecting an element queues an @mention and drops back to the default mode.
+  selectElement: (id) => set({ targetId: id, pendingInsert: `@${id} `, mode: "none" }),
   consumeInsert: () => {
     const v = get().pendingInsert;
     if (v) set({ pendingInsert: null });

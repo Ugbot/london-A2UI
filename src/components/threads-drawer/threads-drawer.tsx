@@ -217,7 +217,7 @@ export default function ThreadsDrawer({
     return (
       <aside
         aria-label="Threads drawer"
-        className={cx(styles.drawer, styles.drawerClosed)}
+        className={cx("chrome", styles.drawer, styles.drawerClosed)}
       >
         <div className={styles.collapsedRail}>
           {/* Native title here (not the styled ::after): the collapsed rail
@@ -256,7 +256,7 @@ export default function ThreadsDrawer({
     <>
       <aside
         aria-label="Threads drawer"
-        className={cx(styles.drawer, styles.drawerOpen)}
+        className={cx("chrome", styles.drawer, styles.drawerOpen)}
       >
         <div className={styles.drawerSurface}>
           <div className={styles.drawerHeader}>

@@ -16,13 +16,13 @@ export function ThreadsPanelGate({ children }: { children: React.ReactNode }) {
       // SSR / first-paint placeholder: matches the open drawer's footprint +
       // surface (and collapses to nothing on mobile) so the panel doesn't flash
       // a bare-background column or shift the content when the drawer mounts.
-      return <div className={styles.drawerPlaceholder} aria-hidden />;
+      return <div className={`chrome ${styles.drawerPlaceholder}`} aria-hidden />;
     }
     return <>{children}</>;
   }
 
   return (
-    <aside aria-label="Threads (locked)" className={styles.lockedPanel}>
+    <aside aria-label="Threads (locked)" className={`chrome ${styles.lockedPanel}`}>
       <div className={styles.drawerHeader}>
         <div className={styles.drawerHeaderMain}>
           <h2 className={styles.drawerTitle}>Threads</h2>
