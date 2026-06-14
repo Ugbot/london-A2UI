@@ -7,6 +7,14 @@
 import * as React from "react";
 import * as Y from "yjs";
 import type { CompositionNode } from "@/bricks/composition";
+import {
+  ORIGIN,
+  getCanvas,
+  getData,
+  readTree,
+  writeTree,
+  observeTree,
+} from "./doc-model";
 import { useCollab, type CollabUser } from "./provider";
 
 /**
@@ -18,52 +26,54 @@ import { useCollab, type CollabUser } from "./provider";
  * Yjs doc is used solo and collaborative: turning collaboration on simply
  * attaches the WebSocket provider to this doc, so the canvas syncs without
  * re-keying or seeding.
+ *
+ * The tree is stored FINE-GRAINED (see doc-model.ts): `setWidget(next)` reconciles
+ * into minimal per-node/per-prop deltas, so a one-prop edit emits a single delta and
+ * collab merges at the node level. `[widget, setWidget]` keeps its old contract, so
+ * existing callers (page.tsx edit/restore, persistence) are unchanged.
  */
-const CANVAS_KEY = "widget";
-
 export function useSharedWidget(): [
   CompositionNode | null,
   (next: CompositionNode | null) => void,
 ] {
   const { doc } = useCollab();
-  const canvas = React.useMemo(() => doc.getMap("canvas"), [doc]);
 
   const [widget, setLocal] = React.useState<CompositionNode | null>(
-    () => (canvas.get(CANVAS_KEY) as CompositionNode | undefined) ?? null,
+    () => readTree(doc),
   );
 
   React.useEffect(() => {
-    const update = () =>
-      setLocal((canvas.get(CANVAS_KEY) as CompositionNode | undefined) ?? null);
+    const update = () => setLocal(readTree(doc));
     update();
-    canvas.observe(update);
-    return () => canvas.unobserve(update);
-  }, [canvas]);
+    return observeTree(doc, update);
+  }, [doc]);
 
   const setWidget = React.useCallback(
-    (next: CompositionNode | null) => {
-      if (next === null) canvas.delete(CANVAS_KEY);
-      else canvas.set(CANVAS_KEY, next);
-    },
-    [canvas],
+    (next: CompositionNode | null) => writeTree(doc, next, ORIGIN.local),
+    [doc],
   );
 
   return [widget, setWidget];
 }
 
 /**
- * Transactional undo/redo for the canvas — "Figma with JS". The canvas tree lives
- * in the Yjs doc, so a Y.UndoManager gives transactional, collab-aware history for
- * free: each edit is a step, undo only reverts LOCAL changes. `current()` reads the
- * post-undo/redo value synchronously (Yjs applies in-band) so the caller can persist
- * it; `clear()` resets history (e.g. after switching to another report).
+ * Transactional undo/redo — "Figma with JS & data". Both the canvas tree AND the
+ * keyed read-model live in the one Yjs doc, so a single Y.UndoManager spanning BOTH
+ * maps gives atomic rewind across structure + data: one user intent (edit a node and
+ * seed its data) groups into one step and undoes together. `trackedOrigins` is scoped
+ * to local/agent edits, so background worker fetches and remote-peer changes don't
+ * pollute YOUR undo stack. `current()` reads post-undo/redo synchronously; `clear()`
+ * resets history (e.g. after switching to another report).
  */
 export function useCanvasHistory() {
   const { doc } = useCollab();
-  const canvas = React.useMemo(() => doc.getMap("canvas"), [doc]);
   const undoManager = React.useMemo(
-    () => new Y.UndoManager(canvas, { captureTimeout: 250 }),
-    [canvas],
+    () =>
+      new Y.UndoManager([getCanvas(doc), getData(doc)], {
+        captureTimeout: 250,
+        trackedOrigins: new Set<unknown>([ORIGIN.local, ORIGIN.agent]),
+      }),
+    [doc],
   );
   const [{ canUndo, canRedo }, setState] = React.useState({ canUndo: false, canRedo: false });
 
@@ -82,10 +92,7 @@ export function useCanvasHistory() {
     };
   }, [undoManager]);
 
-  const current = React.useCallback(
-    () => ((canvas.get("widget") as CompositionNode | undefined) ?? null),
-    [canvas],
-  );
+  const current = React.useCallback(() => readTree(doc), [doc]);
 
   return {
     canUndo,
