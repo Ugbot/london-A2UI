@@ -52,6 +52,8 @@ import {
   type TemplateKind,
 } from "@/bricks/foundry-templates";
 import { HistoryScrubber } from "@/components/HistoryScrubber";
+import { MenuButton } from "@/components/ui/MenuButton";
+import { Wand2, Undo2, Redo2 } from "lucide-react";
 import { useSharedWidget, useCanvasHistory } from "@/collab/hooks";
 import { CollabControls } from "@/collab/CollabControls";
 import { useCollab } from "@/collab/provider";
@@ -565,41 +567,39 @@ export default function WidgetComposerPage() {
               }
               headerExtra={
                 <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setAutoBricks(!autoBricks)}
-                    title="Auto: build new bricks without an approval prompt"
-                    className={
-                      "rounded-[var(--radius)] border px-2.5 py-1 text-xs font-medium " +
-                      (autoBricks
-                        ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
-                        : "border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:bg-[var(--secondary)]")
-                    }
-                  >
-                    Auto bricks {autoBricks ? "on" : "off"}
-                  </button>
+                  {/* History */}
                   <div className="flex items-center">
                     <button
                       onClick={undoEdit}
                       disabled={!canUndo}
                       title="Undo (⌘/Ctrl+Z)"
-                      className="rounded-l-[var(--radius)] border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] hover:bg-[var(--secondary)] disabled:opacity-40"
+                      className="grid h-7 w-7 place-items-center rounded-l-[var(--radius)] border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:bg-[var(--secondary)] disabled:opacity-40"
                     >
-                      ↶
+                      <Undo2 size={13} />
                     </button>
                     <button
                       onClick={redoEdit}
                       disabled={!canRedo}
                       title="Redo (⇧⌘/Ctrl+Z)"
-                      className="rounded-r-[var(--radius)] border border-l-0 border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] hover:bg-[var(--secondary)] disabled:opacity-40"
+                      className="grid h-7 w-7 place-items-center rounded-r-[var(--radius)] border border-l-0 border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:bg-[var(--secondary)] disabled:opacity-40"
                     >
-                      ↷
+                      <Redo2 size={13} />
                     </button>
                   </div>
                   <HistoryScrubber />
                   <span className="h-5 w-px bg-[var(--border)]" />
+                  {/* Build */}
+                  <MenuButton
+                    icon={Wand2}
+                    label="Auto"
+                    active={autoBricks}
+                    onClick={() => setAutoBricks(!autoBricks)}
+                    title="Auto-build new bricks without an approval prompt"
+                  />
                   <DataPanel />
-                  <span className="h-5 w-px bg-[var(--border)]" />
                   <ModelMenu value={modelId} onChange={setModelId} />
+                  <span className="h-5 w-px bg-[var(--border)]" />
+                  {/* Output */}
                   <ExportMenu widget={widget} onImport={(t) => applyTree(t)} />
                   <StyleMenu />
                   <span className="h-5 w-px bg-[var(--border)]" />

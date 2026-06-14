@@ -5,10 +5,12 @@
  * the canvas runs solo until the user (or the agent) turns it on. Once enabled,
  * it shows live presence + the Share button + a way to go back to solo.
  */
+import { Users } from "lucide-react";
 import { useCollab } from "./provider";
 import { PresenceBar } from "./PresenceBar";
 import { ShareButton } from "./ShareButton";
 import { Tooltip } from "../components/ui/Tooltip";
+import { MenuButton } from "../components/ui/MenuButton";
 
 export function CollabControls() {
   const { enabled, enable, disable } = useCollab();
@@ -16,27 +18,17 @@ export function CollabControls() {
   if (!enabled) {
     return (
       <Tooltip text="Turn on live collaboration: share a link, see others' cursors and presence.">
-        <button
-          onClick={enable}
-          className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--secondary)]"
-        >
-          Collaborate
-        </button>
+        <MenuButton icon={Users} label="Collaborate" onClick={enable} />
       </Tooltip>
     );
   }
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
       <PresenceBar />
       <ShareButton />
       <Tooltip text="Stop collaborating and go back to working on your own.">
-        <button
-          onClick={disable}
-          className="rounded-[var(--radius)] border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted-foreground)] hover:bg-[var(--secondary)]"
-        >
-          Solo
-        </button>
+        <MenuButton icon={Users} label="Solo" active onClick={disable} />
       </Tooltip>
     </div>
   );

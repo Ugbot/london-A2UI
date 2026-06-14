@@ -8,6 +8,8 @@
  * inspection. Mirrors the ReportsMenu dropdown pattern.
  */
 import * as React from "react";
+import { Database } from "lucide-react";
+import { MenuButton } from "@/components/ui/MenuButton";
 
 type AuthType = "none" | "bearer" | "apiKey" | "basic";
 interface Endpoint {
@@ -90,9 +92,7 @@ export function DataPanel() {
 
   return (
     <div className="relative">
-      <button onClick={() => setOpen((o) => !o)} title="Manage data connections (APIs/CMS) + secrets" className={btn}>
-        Data
-      </button>
+      <MenuButton icon={Database} label="Data" active={open} onClick={() => setOpen((o) => !o)} title="Manage data connections (APIs/CMS) + secrets" />
       {open && (
         <div className="absolute right-0 z-50 mt-1 flex max-h-[32rem] w-96 flex-col gap-2 overflow-auto rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] p-3 text-[var(--card-foreground)] shadow-md">
           <div className="flex items-center justify-between">

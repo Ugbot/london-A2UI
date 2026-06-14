@@ -2,8 +2,10 @@
 
 /** A compact menu of style presets the user can toggle on/off at will. */
 import { useState } from "react";
+import { Palette } from "lucide-react";
 import { STYLE_PRESETS, useStyleLayers } from "./StyleLayers";
 import { Tooltip } from "../components/ui/Tooltip";
+import { MenuButton } from "../components/ui/MenuButton";
 
 export function StyleMenu() {
   const { toggleLayer, clearLayers, has, layers } = useStyleLayers();
@@ -12,12 +14,12 @@ export function StyleMenu() {
   return (
     <div className="relative">
       <Tooltip text="Restyle the canvas — toggle accent colours, corner radius, and background.">
-        <button
+        <MenuButton
+          icon={Palette}
+          label={`Style${layers.length ? ` (${layers.length})` : ""}`}
+          active={open || layers.length > 0}
           onClick={() => setOpen((o) => !o)}
-          className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--secondary)]"
-        >
-          Style{layers.length ? ` (${layers.length})` : ""}
-        </button>
+        />
       </Tooltip>
       {open && (
         <div className="absolute right-0 z-50 mt-1 w-44 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] p-2 shadow-md">

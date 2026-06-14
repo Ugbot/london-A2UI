@@ -10,8 +10,10 @@ import * as Y from "yjs";
 import type { CompositionNode } from "@/bricks/composition";
 import { getActiveDoc } from "@/engine/doc-registry";
 import { buildReportBundle, bytesToBase64 } from "@/export/pwa";
+import { Download } from "lucide-react";
 import { collectDocumentCss } from "@/export/collect-css";
 import { bakeToBrick, toPascalBrickName } from "@/export/bake";
+import { MenuButton } from "@/components/ui/MenuButton";
 
 const THEME_VARS = [
   "--background", "--foreground", "--card", "--card-foreground", "--primary",
@@ -160,13 +162,13 @@ export function ExportMenu({
 
   return (
     <div className="relative">
-      <button
+      <MenuButton
+        icon={Download}
+        label="Export"
+        active={open}
         onClick={() => setOpen((o) => !o)}
-        title="Export this report (JSON / HTML / React / PNG / PDF) or import one"
-        className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--secondary)]"
-      >
-        Export
-      </button>
+        title="Bake to brick, export the site (HTML/PWA/React/PNG/PDF), or import"
+      />
       {open && (
         <div className="absolute right-0 z-50 mt-1 flex w-44 flex-col rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] p-1 shadow-md">
           <Item label="🧱 Bake to brick…" onClick={() => void bake()} />
