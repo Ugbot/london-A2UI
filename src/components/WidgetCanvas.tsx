@@ -12,6 +12,9 @@ import { Renderer } from "@/components/Renderer";
 import { CursorLayer } from "@/collab/Cursors";
 import { Toolbar } from "@/components/Toolbar";
 import { ToolDock } from "@/components/ToolDock";
+import { ViewToggle } from "@/components/ViewToggle";
+import { RenderedView } from "@/components/RenderedView";
+import { useViewStore } from "@/state/viewStore";
 import { ModeHud } from "@/components/ModeHud";
 import { Inspector } from "@/components/Inspector";
 import { findById } from "@/bricks/tree";
@@ -84,6 +87,10 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
     }
   }, [tree]);
 
+  const viewMode = useViewStore((s) => s.mode);
+  const showSchematic = viewMode !== "rendered";
+  const showRendered = viewMode !== "schematic";
+
   return (
     <div className="flex h-full flex-col">
       <Toolbar
@@ -92,6 +99,7 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
         updated={flash}
         right={
           <div className="flex items-center gap-1.5">
+            <ViewToggle />
             {targetId && (
               <span className="flex items-center gap-1 rounded-full bg-[var(--secondary)] px-2 py-0.5 text-xs">
                 <span className="font-mono text-[var(--primary-foreground)]">@{targetId}</span>
@@ -109,39 +117,50 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
       )}
 
       <div className="flex min-h-0 flex-1">
-        <ToolDock />
-        <div
-          onClickCapture={onCanvasClick}
-          className={cn(
-            "relative flex-1 overflow-auto p-8 transition-colors",
-            moveMode ? "bg-[var(--accent)]/40" : "",
-            selectMode && "cursor-crosshair",
-          )}
-          style={{ backgroundColor: moveMode ? undefined : "var(--canvas-backdrop)" }}
-        >
-          <ModeHud />
-          {selectedNode && onSetSx && (
-            <Inspector
-              node={selectedNode}
-              onSetSx={(sx) => onSetSx(selectedNode.id!, sx)}
-              onClose={clearTarget}
-            />
-          )}
-          {/* The artboard: a white elevated card the widget renders into. */}
-          <div
-            className={cn(
-              "widget-surface mx-auto min-h-[60vh] max-w-5xl rounded-[var(--radius-xl)] bg-[var(--background)] p-6 text-[var(--foreground)] shadow-[0_8px_40px_rgba(0,0,0,0.10)] ring-1 ring-black/5 transition-shadow duration-300",
-              flash && "ring-2 ring-[var(--accent-brand)]",
-            )}
-            style={mergedVars as CSSProperties}
-          >
-            <CursorLayer>
-              <div className={flash ? "animate-[brick-fade_400ms_ease]" : undefined}>
-                <Renderer tree={tree} onStatus={onStatus} rearrange={moveMode} onMove={onMove} />
+        {/* Schematic: the editable canvas (select/drag/inspector). */}
+        {showSchematic && (
+          <div className="flex min-w-0 flex-1">
+            <ToolDock />
+            <div
+              onClickCapture={onCanvasClick}
+              className={cn(
+                "relative flex-1 overflow-auto p-8 transition-colors",
+                moveMode ? "bg-[var(--accent)]/40" : "",
+                selectMode && "cursor-crosshair",
+              )}
+              style={{ backgroundColor: moveMode ? undefined : "var(--canvas-backdrop)" }}
+            >
+              <ModeHud />
+              {selectedNode && onSetSx && (
+                <Inspector
+                  node={selectedNode}
+                  onSetSx={(sx) => onSetSx(selectedNode.id!, sx)}
+                  onClose={clearTarget}
+                />
+              )}
+              {/* The artboard: a white elevated card the widget renders into. */}
+              <div
+                className={cn(
+                  "widget-surface mx-auto min-h-[60vh] max-w-5xl rounded-[var(--radius-xl)] bg-[var(--background)] p-6 text-[var(--foreground)] shadow-[0_8px_40px_rgba(0,0,0,0.10)] ring-1 ring-black/5 transition-shadow duration-300",
+                  flash && "ring-2 ring-[var(--accent-brand)]",
+                )}
+                style={mergedVars as CSSProperties}
+              >
+                <CursorLayer>
+                  <div className={flash ? "animate-[brick-fade_400ms_ease]" : undefined}>
+                    <Renderer tree={tree} onStatus={onStatus} rearrange={moveMode} onMove={onMove} />
+                  </div>
+                </CursorLayer>
               </div>
-            </CursorLayer>
+            </div>
           </div>
-        </div>
+        )}
+        {/* Rendered: the live target app in an isolated iframe (read-only web view). */}
+        {showRendered && (
+          <div className={cn("min-w-0 flex-1", showSchematic && "border-l border-[var(--border)]")}>
+            <RenderedView />
+          </div>
+        )}
       </div>
     </div>
   );
