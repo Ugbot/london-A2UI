@@ -33,6 +33,11 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   { brick: "Divider", label: "Divider", group: "Layout", defaults: {} },
   // Media
   { brick: "Image", label: "Image", group: "Media", defaults: { src: "https://placehold.co/600x320", alt: "Image" } },
+  // Wireframe — sketch with boxes, then "Complete with AI" turns each into real bricks.
+  { brick: "Wireframe", label: "Box", group: "Wireframe", defaults: { label: "Box", kind: "section" } },
+  { brick: "Wireframe", label: "Chart", group: "Wireframe", defaults: { label: "Chart", kind: "chart" } },
+  { brick: "Wireframe", label: "Form", group: "Wireframe", defaults: { label: "Form", kind: "form" } },
+  { brick: "Wireframe", label: "List", group: "Wireframe", defaults: { label: "List", kind: "list" } },
 ];
 
 /** Minimal default props for a palette brick (resolveProps fills the schema rest). */

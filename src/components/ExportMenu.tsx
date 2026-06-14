@@ -13,6 +13,7 @@ import { buildReportBundle, bytesToBase64 } from "@/export/pwa";
 import { Download } from "lucide-react";
 import { collectDocumentCss } from "@/export/collect-css";
 import { bakeToBrick, toPascalBrickName } from "@/export/bake";
+import { buildProjectFiles } from "@/export/project";
 import { MenuButton } from "@/components/ui/MenuButton";
 
 const THEME_VARS = [
@@ -93,6 +94,28 @@ export function ExportMenu({
     } catch (e) {
       window.alert(`Bake failed: ${e instanceof Error ? e.message : String(e)}`);
     }
+  };
+
+  const exportProject = async () => {
+    const el = surfaceEl();
+    if (!el) return;
+    const cs = getComputedStyle(document.documentElement);
+    const themeCss = THEME_VARS.map((v) => `  ${v}: ${cs.getPropertyValue(v).trim()};`).join("\n");
+    const doc = getActiveDoc();
+    const stateUpdateB64 = doc ? bytesToBase64(Y.encodeStateAsUpdate(doc)) : "";
+    const files = buildProjectFiles({
+      name: "A2UI Site",
+      bodyHtml: el.innerHTML,
+      css: collectDocumentCss(),
+      themeCss,
+      tree: widget,
+      stateUpdateB64,
+    });
+    const { default: JSZip } = await import("jszip");
+    const zip = new JSZip();
+    for (const [path, content] of Object.entries(files)) zip.file(path, content);
+    const blob = await zip.generateAsync({ type: "blob" });
+    download("a2ui-site.zip", blob, "application/zip");
   };
 
   const exportPwa = () => {
@@ -178,6 +201,7 @@ export function ExportMenu({
           <div className="my-1 border-t border-[var(--border)]" />
           <Item label="Standalone site (HTML)" onClick={exportHtml} />
           <Item label="Runnable site (offline PWA)" onClick={exportPwa} />
+          <Item label="Runnable project (zip)" onClick={() => void exportProject()} />
           <Item label="React (.tsx)" onClick={exportReact} />
           <Item label="PNG image" onClick={() => void exportPng()} />
           <Item label="PDF" onClick={() => void exportPdf()} />

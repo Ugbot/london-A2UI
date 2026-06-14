@@ -32,7 +32,7 @@ export function Palette() {
           </div>
           {g.items.map((item) => (
             <button
-              key={item.brick}
+              key={`${item.brick}:${item.label}`}
               draggable
               onDragStart={(e) => {
                 e.dataTransfer.setData(PALETTE_MIME, item.brick);

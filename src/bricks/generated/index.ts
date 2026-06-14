@@ -8,6 +8,7 @@ import { brick as b2 } from "./network-map";
 import { brick as b3 } from "./qrcode";
 import { brick as b4 } from "./spinning-cube";
 import { brick as b5 } from "./spinning-cube-lit";
-import { brick as b6 } from "./uplink-game-engine";
+import { brick as b6 } from "./uplink-game";
+import { brick as b7 } from "./uplink-game-engine";
 
-export const GENERATED_BRICKS: BrickDef[] = [b0, b1, b2, b3, b4, b5, b6];
+export const GENERATED_BRICKS: BrickDef[] = [b0, b1, b2, b3, b4, b5, b6, b7];
