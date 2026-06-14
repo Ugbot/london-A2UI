@@ -52,3 +52,7 @@ __pycache__
 
 # dbos local state
 .dbos/
+
+# DB dumps: the full backup carries connection SECRETS — never commit it.
+/db/widgetcache.sql
+/db/*.dump

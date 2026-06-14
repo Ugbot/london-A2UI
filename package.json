@@ -13,7 +13,10 @@
     "dev:infra": "node scripts/copilotkit-dev-infra.mjs",
     "cache:smoke": "node --env-file=.env --import tsx scripts/cache-smoke.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:dump": "node --env-file=.env scripts/db-dump.mjs",
+    "db:dump:bricks": "node --env-file=.env scripts/db-dump.mjs --bricks",
+    "db:restore": "node --env-file=.env scripts/db-restore.mjs"
   },
   "dependencies": {
     "@ag-ui/client": "0.0.55",
