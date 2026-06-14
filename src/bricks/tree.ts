@@ -203,6 +203,50 @@ export function replaceById(
   return walk(clone(tree));
 }
 
+/** Find the PARENT node of `id` (the node whose children contains it), or null. */
+export function findParent(tree: CompositionNode | null, id: string): CompositionNode | null {
+  if (!tree?.children) return null;
+  for (const child of tree.children) {
+    if (child.id === id) return tree;
+    const hit = findParent(child, id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * Move `dragId` to be a child of `parentId` at `index` (drop INTO a container — the
+ * nesting case drag-to-rearrange's before/after sibling move can't express). No-op if
+ * either is missing, dragId is the root, or parentId is inside dragId (can't nest into
+ * own descendant). Index is adjusted when moving down within the same parent so the drop
+ * lands where the indicator showed. Returns a new tree.
+ */
+export function reparentNode(
+  tree: CompositionNode,
+  dragId: string,
+  parentId: string,
+  index: number,
+): CompositionNode {
+  if (dragId === parentId) return tree;
+  if (tree.id === dragId) return tree; // can't move the root
+  const node = findById(tree, dragId);
+  const parent = findById(tree, parentId);
+  if (!node || !parent) return tree;
+  if (findById(node, parentId)) return tree; // parentId is a descendant of dragId
+
+  let idx = index;
+  const oldParent = findParent(tree, dragId);
+  if (oldParent && oldParent.id === parentId) {
+    const oldIndex = (oldParent.children ?? []).findIndex((c) => c.id === dragId);
+    if (oldIndex !== -1 && oldIndex < index) idx = index - 1; // removal shifts later slots
+  }
+
+  const moved = clone(node);
+  const detached = removeById(tree, dragId);
+  if (!detached) return tree;
+  return insertChild(detached, parentId, moved, idx);
+}
+
 /** Return a new tree with `child` inserted under `parentId` (at end, or index). */
 export function insertChild(
   tree: CompositionNode,

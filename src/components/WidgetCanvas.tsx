@@ -18,12 +18,14 @@ import { useViewStore } from "@/state/viewStore";
 import { ModeHud } from "@/components/ModeHud";
 import { Inspector } from "@/components/Inspector";
 import { DesignerOverlay } from "@/components/canvas/DesignerOverlay";
+import { DropIndicator } from "@/components/canvas/DropIndicator";
+import { computeDropTarget, type DropTarget } from "@/components/canvas/useDropTarget";
 import { Palette } from "@/components/canvas/Palette";
 import { findById } from "@/bricks/tree";
 import { primaryTextProps } from "@/bricks/text-props";
 import { registry } from "@/bricks/registry";
 import { resolveProps } from "@/bricks/composition";
-import { PALETTE_MIME, paletteDefaults } from "@/bricks/palette";
+import { PALETTE_MIME, ELEMENT_MIME, paletteDefaults } from "@/bricks/palette";
 import { useStyleLayers } from "@/style/StyleLayers";
 import { useMentionStore } from "@/state/mentionStore";
 import { useSelectionStore } from "@/state/selectionStore";
@@ -73,16 +75,20 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
   // Schematic is the WYSIWYG editor: clicking selects (no tool needed). We select on
   // capture but do NOT stop propagation, so interactive bricks still receive the click.
   // Double-click enters inline text editing. Move mode (drag tool) suspends selection.
-  const inEditor = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.('[contenteditable="true"]');
+  // Ignore clicks on the inline editor OR any chrome UI (Inspector/ModeHud are `.chrome`)
+  // — without this, clicking the Inspector hits this capture handler, finds no brick id,
+  // and clears the selection, so the panel vanishes the moment you touch it.
+  const inChromeUi = (t: EventTarget | null) =>
+    !!(t as HTMLElement | null)?.closest?.('[contenteditable="true"], .chrome');
 
   const onCanvasClick = (e: React.MouseEvent) => {
-    if (moveMode || inEditor(e.target)) return; // don't disturb an active inline edit
+    if (moveMode || inChromeUi(e.target)) return;
     const id = brickIdAt(e.target);
     if (id) select(id);
     else clear(); // click on empty artboard deselects
   };
   const onCanvasDoubleClick = (e: React.MouseEvent) => {
-    if (moveMode || inEditor(e.target)) return;
+    if (moveMode || inChromeUi(e.target)) return;
     const id = brickIdAt(e.target);
     if (!id) return;
     const node = findById(tree, id);
@@ -97,25 +103,42 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
     setHover(brickIdAt(e.target));
   };
 
-  // Drag a brick from the palette → insert it into the nearest container (or seed a
-  // new Stack on an empty canvas). Default props are filled via the brick schema.
+  // Nesting drag-drop with a live indicator. Works for palette pieces (add) AND dragging
+  // an existing element by its selection grip (move/nest into a container).
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const isDnd = (e: React.DragEvent) =>
+    e.dataTransfer.types.includes(PALETTE_MIME) || e.dataTransfer.types.includes(ELEMENT_MIME);
+
+  const onCanvasDragOver = (e: React.DragEvent) => {
+    if (!isDnd(e)) return;
+    e.preventDefault();
+    setDropTarget(computeDropTarget(e.clientX, e.clientY, tree, registry));
+  };
+  const onCanvasDragLeave = (e: React.DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTarget(null);
+  };
   const onCanvasDrop = (e: React.DragEvent) => {
     const brick = e.dataTransfer.getData(PALETTE_MIME);
-    if (!brick || !registry.has(brick)) return;
+    const moveId = e.dataTransfer.getData(ELEMENT_MIME);
+    if (!brick && !moveId) return;
     e.preventDefault();
-    const node = { brick, props: resolveProps({ brick, props: paletteDefaults(brick) }, registry) };
-    if (!tree) {
-      dispatch({ type: "tree/render", tree: { brick: "Stack", props: { gap: 4 }, children: [node] } });
+    const target = computeDropTarget(e.clientX, e.clientY, tree, registry);
+    setDropTarget(null);
+
+    if (brick) {
+      if (!registry.has(brick)) return;
+      const node = { brick, props: resolveProps({ brick, props: paletteDefaults(brick) }, registry) };
+      if (!tree || !target) {
+        dispatch({ type: "tree/render", tree: { brick: "Stack", props: { gap: 4 }, children: [node] } });
+      } else {
+        dispatch({ type: "tree/insert", parentId: target.parentId, node, index: target.index });
+      }
       return;
     }
-    const dropId = brickIdAt(e.target);
-    const dropNode = dropId ? findById(tree, dropId) : null;
-    const parentId =
-      dropNode && registry.get(dropNode.brick)?.acceptsChildren ? dropId! : tree.id!;
-    dispatch({ type: "tree/insert", parentId, node });
-  };
-  const onCanvasDragOver = (e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes(PALETTE_MIME)) e.preventDefault(); // allow drop
+    // moving an existing element into the target container at the indicated index
+    if (moveId && target) {
+      dispatch({ type: "tree/reparent", dragId: moveId, parentId: target.parentId, index: target.index });
+    }
   };
 
   // Keyboard: Esc exits edit then clears; Delete removes the selection — but never
@@ -203,6 +226,7 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
               onMouseLeave={() => setHover(null)}
               onDrop={onCanvasDrop}
               onDragOver={onCanvasDragOver}
+              onDragLeave={onCanvasDragLeave}
               className={cn(
                 "relative flex-1 overflow-auto p-8 transition-colors",
                 moveMode ? "bg-[var(--accent)]/40" : "",
@@ -220,6 +244,7 @@ export function WidgetCanvas({ tree, status, onStatus, title = "Untitled report"
               {/* Designer chrome: hover/selection boxes, label, handles, quick actions
                   (rect-measured, schematic-only — never in the rendered iframe). */}
               <DesignerOverlay tree={tree} surfaceRef={surfaceRef} />
+              <DropIndicator target={dropTarget} />
               {/* The artboard: a white elevated card the widget renders into. */}
               <div
                 ref={surfaceRef}

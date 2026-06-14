@@ -53,6 +53,13 @@ const treeMove = z.object({
   targetId: z.string().min(1),
   position: z.enum(["before", "after"]).default("before"),
 });
+/** Move a node INTO a container at an index (nesting drop). */
+const treeReparent = z.object({
+  type: z.literal("tree/reparent"),
+  dragId: z.string().min(1),
+  parentId: z.string().min(1),
+  index: z.number().int().nonnegative(),
+});
 /** Replace a node (and its subtree) with a new node (wireframe completion). */
 const treeReplace = z.object({
   type: z.literal("tree/replace"),
@@ -121,6 +128,7 @@ export const commandSchema = z.discriminatedUnion("type", [
   treeRender,
   treePatch,
   treeMove,
+  treeReparent,
   treeReplace,
   treeInsert,
   treeRemove,

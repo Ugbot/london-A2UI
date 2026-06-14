@@ -22,6 +22,7 @@ import {
 import {
   patchById,
   moveNode,
+  reparentNode,
   replaceById,
   insertChild,
   removeById,
@@ -79,6 +80,13 @@ export function applyCommand(
       const tree = readTree(doc);
       if (!tree) return fail("empty canvas");
       writeTree(doc, moveNode(tree, command.dragId, command.targetId, command.position), origin);
+      return ok;
+    }
+
+    case "tree/reparent": {
+      const tree = readTree(doc);
+      if (!tree) return fail("empty canvas");
+      writeTree(doc, reparentNode(tree, command.dragId, command.parentId, command.index), origin);
       return ok;
     }
 

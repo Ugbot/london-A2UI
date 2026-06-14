@@ -7,11 +7,12 @@
  * dispatch path so actions are transactional + rewindable.
  */
 import * as React from "react";
-import { Pencil, Copy, Trash2, AtSign } from "lucide-react";
+import { Pencil, Copy, Trash2, AtSign, GripVertical } from "lucide-react";
 import { dispatch } from "@/engine/dispatch";
 import { useSelectionStore } from "@/state/selectionStore";
 import { useMentionStore } from "@/state/mentionStore";
 import { primaryTextProps } from "@/bricks/text-props";
+import { ELEMENT_MIME } from "@/bricks/palette";
 
 export function SelectionToolbar({ id, brick, rect }: { id: string; brick: string; rect: DOMRect }) {
   const enterEdit = useSelectionStore((s) => s.enterEdit);
@@ -42,6 +43,17 @@ export function SelectionToolbar({ id, brick, rect }: { id: string; brick: strin
       className="pointer-events-auto fixed z-[1002] flex items-center gap-0.5 rounded-md bg-[var(--accent-brand)] px-1 py-0.5 shadow-lg"
       style={{ top: Math.max(4, rect.top - 38), left: rect.left }}
     >
+      <div
+        draggable
+        title="Drag to move / nest"
+        onDragStart={(e) => {
+          e.dataTransfer.setData(ELEMENT_MIME, id);
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        className="grid h-7 w-5 cursor-grab place-items-center text-white/80 hover:text-white active:cursor-grabbing"
+      >
+        <GripVertical size={14} />
+      </div>
       {editable && (
         <Btn title="Edit text (double-click)" onClick={() => enterEdit(id)}>
           <Pencil size={14} />

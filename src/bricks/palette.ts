@@ -4,6 +4,8 @@
  * the brick's schema defaults fill in the rest. Server-safe (no React).
  */
 export const PALETTE_MIME = "application/x-a2ui-brick";
+/** MIME for dragging an EXISTING element (carries its id) to reparent/reorder it. */
+export const ELEMENT_MIME = "application/x-a2ui-move";
 
 export interface PaletteItem {
   brick: string;

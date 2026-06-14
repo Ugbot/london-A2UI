@@ -8,10 +8,49 @@ import {
   duplicateById,
   insertChild,
   moveNode,
+  reparentNode,
+  findParent,
   replaceById,
   labelOf,
 } from "./tree";
 import type { CompositionNode } from "./composition";
+
+describe("reparentNode (nesting drop) + findParent", () => {
+  const make = (): CompositionNode =>
+    ensureIds({
+      brick: "Stack",
+      props: {},
+      id: "root",
+      children: [
+        { brick: "Text", props: { text: "a" }, id: "a" },
+        { brick: "Text", props: { text: "b" }, id: "b" },
+        { brick: "Card", props: {}, id: "c", children: [{ brick: "Text", props: { text: "d" }, id: "d" }] },
+      ],
+    });
+  const ids = (n: CompositionNode | null | undefined) => (n?.children ?? []).map((c) => c.id);
+
+  it("findParent returns the container of a node", () => {
+    expect(findParent(make(), "d")?.id).toBe("c");
+    expect(findParent(make(), "a")?.id).toBe("root");
+    expect(findParent(make(), "root")).toBeNull();
+  });
+
+  it("moves a node INTO another container at an index", () => {
+    const r = reparentNode(make(), "a", "c", 0); // a → first child of Card c
+    expect(ids(r)).toEqual(["b", "c"]); // a left the root
+    expect(ids(findById(r, "c"))).toEqual(["a", "d"]); // a is now inside c, before d
+  });
+
+  it("reorders within the same parent (adjusts index for the removal shift)", () => {
+    expect(ids(reparentNode(make(), "a", "root", 2))).toEqual(["b", "a", "c"]); // before c
+    expect(ids(reparentNode(make(), "a", "root", 3))).toEqual(["b", "c", "a"]); // append
+  });
+
+  it("guards: can't nest a node into its own descendant, or move the root", () => {
+    expect(ids(reparentNode(make(), "c", "d", 0))).toEqual(ids(make())); // c contains d
+    expect(reparentNode(make(), "root", "c", 0).id).toBe("root");
+  });
+});
 
 describe("moveNode (drag-to-rearrange)", () => {
   const make = (): CompositionNode =>
