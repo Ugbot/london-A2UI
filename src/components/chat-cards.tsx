@@ -97,6 +97,7 @@ export interface FoundrySpec {
   npmPackage?: string;
   schemaSource?: string;
   componentSource?: string;
+  acceptsChildren?: boolean;
 }
 
 /**

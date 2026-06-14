@@ -48,6 +48,11 @@ import type { RenderStatus } from "@/lib/types";
 import { streamToElement } from "@/state/store";
 import { dispatch } from "@/engine/dispatch";
 import { validateAndDispatch } from "@/bricks/contract";
+import {
+  BRICK_TEMPLATES,
+  composeBrickFromTemplate,
+  type TemplateKind,
+} from "@/bricks/foundry-templates";
 import { HistoryScrubber } from "@/components/HistoryScrubber";
 import { useSharedWidget, useCanvasHistory } from "@/collab/hooks";
 import { CollabControls } from "@/collab/CollabControls";
@@ -457,6 +462,60 @@ export default function WidgetComposerPage() {
     handler: async ({ enabled }) => {
       setAutoBricks(enabled);
       return enabled ? "Auto bricks ON." : "Auto bricks OFF (approval required).";
+    },
+  });
+
+  // Discover the wrapper templates that forge a library into a conformant brick.
+  useFrontendTool({
+    name: "list_brick_templates",
+    description:
+      "List the Foundry WRAPPER TEMPLATES for forging a library into a conformant brick (sx/style, bindKey reactive data, dispatch writes, and a typed contract are wired for you). Returns each template's kind, what its `render` expression can reference, and an example. Use this BEFORE forge_from_template; prefer it over hand-writing a brick with create_brick.",
+    parameters: z.object({}),
+    handler: async () => JSON.stringify(BRICK_TEMPLATES),
+  });
+
+  // Forge a library into a brick via a template — composes guaranteed-conformant source.
+  useHumanInTheLoop({
+    name: "forge_from_template",
+    description:
+      "Forge a NEW brick from a wrapper template (see list_brick_templates) so it conforms automatically. Provide name (PascalCase), description, tags, optional npmPackage, the template `kind` (dataviz|input|display|container), and `fills`: imports (the library import line[s]), render (a JSX expression using the kind's locals — dataviz: rows/props; input: value/set(v)/props; display: value/props; container: props.children), and optional schemaFields (extra zod fields). The Foundry composes schema+component for you. Prefer this over create_brick for library-backed bricks.",
+    parameters: z.object({
+      name: z.string().describe("PascalCase brick name"),
+      description: z.string(),
+      tags: z.array(z.string()).optional(),
+      npmPackage: z.string().optional(),
+      kind: z.enum(["dataviz", "input", "display", "container"]),
+      fills: z.object({
+        imports: z.string().optional(),
+        render: z.string(),
+        schemaFields: z.string().optional(),
+      }),
+    }),
+    render: ({ args, status, respond, result }) => {
+      let spec: Record<string, unknown> = { ...args };
+      try {
+        if (args?.kind && args.fills?.render) {
+          const composed = composeBrickFromTemplate(args.kind as TemplateKind, args.fills);
+          spec = {
+            name: args.name,
+            description: args.description,
+            tags: args.tags,
+            npmPackage: args.npmPackage,
+            schemaSource: composed.schemaSource,
+            componentSource: composed.componentSource,
+            acceptsChildren: composed.acceptsChildren,
+          };
+        }
+      } catch {
+        /* fall back to raw args; FoundryCard will surface the build error */
+      }
+      return (
+        <FoundryCard
+          spec={spec}
+          respond={status === "executing" ? respond : undefined}
+          result={typeof result === "string" ? result : undefined}
+        />
+      );
     },
   });
 

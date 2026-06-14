@@ -36,6 +36,8 @@ interface FoundryBody {
   npmPackage?: string;
   schemaSource?: string;
   componentSource?: string;
+  /** Whether the brick renders child composition nodes (container templates). */
+  acceptsChildren?: boolean;
 }
 
 interface Job {
@@ -72,7 +74,7 @@ async function rewriteBarrel() {
 
 /** The actual build work — run in the background; updates the job entry. */
 async function runFoundry(jobId: string, body: Required<Pick<FoundryBody, "name" | "description" | "schemaSource" | "componentSource">> & FoundryBody) {
-  const { name, description, tags = [], npmPackage, schemaSource, componentSource } = body;
+  const { name, description, tags = [], npmPackage, schemaSource, componentSource, acceptsChildren = false } = body;
   try {
     let installed: string | null = null;
     if (npmPackage) {
@@ -89,9 +91,16 @@ async function runFoundry(jobId: string, body: Required<Pick<FoundryBody, "name"
     await mkdir(dir, { recursive: true });
     await writeFile(path.join(dir, "schema.ts"), schemaSource, "utf8");
     await writeFile(path.join(dir, "component.tsx"), componentSource, "utf8");
+    // Wrapper templates export a `contract`; wire it through automatically. Freehand
+    // bricks without one keep the plain import (no missing-export build error).
+    const hasContract = /export\s+const\s+contract\b/.test(schemaSource);
+    const schemaImport = hasContract
+      ? `import { schema, contract } from "./schema";`
+      : `import { schema } from "./schema";`;
+    const contractLine = hasContract ? `  contract,\n` : "";
     await writeFile(
       path.join(dir, "index.ts"),
-      `import { defineBrick } from "@/bricks/types";\nimport { schema } from "./schema";\nimport { Component } from "./component";\n\nexport const brick = defineBrick({\n  name: ${JSON.stringify(name)},\n  description: ${JSON.stringify(description)},\n  tags: ${JSON.stringify(tags)},\n  schema,\n  acceptsChildren: false,\n  Component,\n});\n`,
+      `import { defineBrick } from "@/bricks/types";\n${schemaImport}\nimport { Component } from "./component";\n\nexport const brick = defineBrick({\n  name: ${JSON.stringify(name)},\n  description: ${JSON.stringify(description)},\n  tags: ${JSON.stringify(tags)},\n  schema,\n  acceptsChildren: ${acceptsChildren ? "true" : "false"},\n${contractLine}  Component,\n});\n`,
       "utf8",
     );
     await rewriteBarrel();

@@ -149,13 +149,18 @@ Research → dashboard:
 - A MasterDetail brick makes a great research browser: list findings/sources as
   items, with each item's detail as a child composition.
 
-Building a new brick when none fits:
-- If neither an existing brick (list_bricks/search_bricks) nor a cached partial
-  can properly express what the user needs, do NOT misuse a brick (e.g. never
-  fake a node graph with a Table). Instead call "create_brick" to forge a real
-  one — choosing a proper library when appropriate (e.g. a graph/diagram lib for
-  node graphs). After it is created, use the new brick by name in the widget.
-- Keep create_brick to genuinely missing capabilities; prefer existing bricks.
+Building a new brick when none fits (the Foundry — forge ANY library):
+- If neither an existing brick (list_bricks/search_bricks) nor a cached partial can
+  express what the user needs, do NOT misuse a brick (e.g. never fake a node graph
+  with a Table). Forge a real one from the right library.
+- PREFER "forge_from_template": call "list_brick_templates" first, pick a kind
+  (dataviz / input / display / container), and supply the library import + a small JSX
+  "render" expression + any extra props. The Foundry composes guaranteed-CONFORMANT
+  source for you — sx/style, bindKey reactive data (useElementData), writes via dispatch,
+  and a typed contract are all wired automatically. This is the reliable path.
+- Only fall back to "create_brick" (hand-written schema+component source) when no
+  template fits the shape. After creation, use the new brick by name.
+- Keep forging to genuinely missing capabilities; prefer existing bricks.
 
 Reuse, recombine, specialize (the cache):
 - "search_partials" returns prior widgets as templates with holes. Prefer
